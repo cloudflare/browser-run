@@ -32,7 +32,7 @@
     "@types/picomatch": "^4.0.3",
     "picomatch": "^4.0.4",
     "pkg-pr-new": "^0.0.67",
-    "vite": "^8.0.10",
+    "vite": "^8.3.3",
     "wrangler": "4.137.0"
   }
 }
