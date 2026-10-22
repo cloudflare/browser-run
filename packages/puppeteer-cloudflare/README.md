@@ -16,12 +16,30 @@ npm install @cloudflare/puppeteer
 
 ## Configuration
 
+`@cloudflare/puppeteer` needs [Node.js compatibility](https://developers.cloudflare.com/workers/runtime-apis/nodejs/#get-started). For a `compatibility_date` of `2026-08-04` or later, Workers enables Node.js compatibility by default. For an earlier date, you must add the `nodejs_compat` compatibility flag.
+
 Add a browser binding to your Wrangler configuration:
 
 ```toml
+compatibility_date = "2026-08-04"
+browser = { binding = "MYBROWSER" }
+```
+
+If your `compatibility_date` is earlier than `2026-08-04`, also add the `nodejs_compat` flag:
+
+```toml
+compatibility_date = "2026-08-03"
 compatibility_flags = ["nodejs_compat"]
 browser = { binding = "MYBROWSER" }
 ```
+
+Do not add the `no_nodejs_compat` flag. The package does not work without Node.js compatibility.
+
+### File options
+
+Options that read or write files use the [Workers virtual file system](https://developers.cloudflare.com/workers/runtime-apis/nodejs/fs/). Examples are `page.screenshot({path})`, `page.pdf({path})`, and `tracing.start({path})`. These options need a `compatibility_date` of `2025-09-01` or later, or the `enable_nodejs_fs_module` flag.
+
+Write files to `/tmp`. Files in `/tmp` exist only for the current request.
 
 ## TypeScript
 
