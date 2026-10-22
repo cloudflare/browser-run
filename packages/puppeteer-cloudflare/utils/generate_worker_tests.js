@@ -8,50 +8,51 @@ import {deleteDir, listFiles, writeFile} from './utils.js';
 const basedir = path.dirname(fileURLToPath(import.meta.url));
 
 const excludedFiles = [
-  'acceptInsecureCerts.spec.ts',
-  'accessibility.spec.ts',
-  'ariaqueryhandler.spec.ts',
-  'autofill.spec.ts',
-  'browser.spec.ts',
-  'browsercontext-cookies.spec.ts',
-  'browsercontext.spec.ts',
-  'cdp/a11yLoaderId.spec.ts',
-  'cdp/backendNodeId.spec.ts',
-  'cdp/bfcache.spec.ts',
-  'cdp/CDPSession.spec.ts',
-  'cdp/devtools.spec.ts',
-  'cdp/extensions.spec.ts',
-  'cdp/heapSnapshot.spec.ts',
-  'cdp/interventionHeaders.spec.ts',
-  'cdp/network.spec.ts',
-  'cdp/pdf.spec.ts',
-  'cdp/pipe.spec.ts',
-  'cdp/prerender.spec.ts',
-  'cdp/queryObjects.spec.ts',
-  'cdp/screencast.spec.ts',
-  'cdp/TargetManager.spec.ts',
-  'cdp/userDataDir.spec.ts',
-  'chromiumonly.spec.ts',
-  'connect.spec.ts',
-  'debugInfo.spec.ts',
-  'defaultbrowsercontext.spec.ts',
-  'device-request-prompt.spec.ts',
-  'download.spec.ts',
-  'emulation.spec.ts',
-  'fixtures.spec.ts',
-  'headful.spec.ts',
-  'idle_override.spec.ts',
-  'ignorehttpserrors.spec.ts',
-  'launcher.spec.ts',
-  'network.spec.ts',
-  'proxy.spec.ts',
-  'requestinterception-experimental.spec.ts',
-  'requestinterception.spec.ts',
-  'screenshot.spec.ts',
-  'stacktrace.spec.ts',
-  'target.spec.ts',
-  'waittask.spec.ts',
-  'worker.spec.ts',
+  'acceptInsecureCerts.test.ts',
+  'accessibility.test.ts',
+  'ariaqueryhandler.test.ts',
+  'autofill.test.ts',
+  'browser.test.ts',
+  'browsercontext-cookies.test.ts',
+  'browsercontext.test.ts',
+  'cdp/a11yLoaderId.test.ts',
+  'cdp/backendNodeId.test.ts',
+  'cdp/bfcache.test.ts',
+  'cdp/CDPSession.test.ts',
+  'cdp/devtools.test.ts',
+  'cdp/extensions.test.ts',
+  'cdp/heapSnapshot.test.ts',
+  'cdp/interventionHeaders.test.ts',
+  'cdp/network.test.ts',
+  'cdp/pdf.test.ts',
+  'cdp/pipe.test.ts',
+  'cdp/prerender.test.ts',
+  'cdp/queryObjects.test.ts',
+  'cdp/screencast.test.ts',
+  'cdp/TargetManager.test.ts',
+  'cdp/userDataDir.test.ts',
+  'chromiumonly.test.ts',
+  'connect.test.ts',
+  'debugInfo.test.ts',
+  'defaultbrowsercontext.test.ts',
+  'device-request-prompt.test.ts',
+  'download.test.ts',
+  'emulation.test.ts',
+  'fixtures.test.ts',
+  'followSymlinks.test.ts',
+  'headful.test.ts',
+  'idle_override.test.ts',
+  'ignorehttpserrors.test.ts',
+  'launcher.test.ts',
+  'network.test.ts',
+  'proxy.test.ts',
+  'requestinterception-experimental.test.ts',
+  'requestinterception.test.ts',
+  'screenshot.test.ts',
+  'stacktrace.test.ts',
+  'target.test.ts',
+  'waittask.test.ts',
+  'worker.test.ts',
 ];
 
 const sourceTestsDir = path.join(basedir, '..', '..', '..', 'submodules', 'puppeteer', 'test', 'src');
@@ -118,7 +119,7 @@ function tracingTempDirectoryPlugin() {
     name: 'tracing-temp-directory',
     enforce: 'pre',
     transform(code, id) {
-      if (!id.endsWith('/tracing.spec.ts')) {
+      if (!id.endsWith('/tracing.test.ts')) {
         return;
       }
       return code.replaceAll('import.meta.dirname', JSON.stringify('/tmp'));
@@ -131,13 +132,13 @@ function remoteTestServerPlugin() {
     name: 'remote-test-server',
     enforce: 'pre',
     transform(code, id) {
-      if (id.endsWith('/page.spec.ts')) {
+      if (id.endsWith('/page.test.ts')) {
         return code.replace(
           "    it('should work with options parameter', async () => {\n      const {page, server} = await getTestState();\n\n      expect(\n        await page.evaluate(() => {\n          return navigator.userAgent;\n        }),\n      ).toContain('Mozilla');\n      await page.setUserAgent({userAgent: 'foobar'});",
           "    it('should work with options parameter', async () => {\n      const {page, server} = await getTestState();\n\n      await page.setUserAgent({userAgent: 'foobar'});",
         );
       }
-      if (id.endsWith('/console.spec.ts')) {
+      if (id.endsWith('/console.test.ts')) {
         // Worker fixtures use HTTPS, so an HTTP URL tests mixed-content blocking
         // instead of the network failure and console location asserted upstream.
         // Browser Run's network proxy can surface the failed lookup as a reset.
@@ -148,7 +149,7 @@ function remoteTestServerPlugin() {
             "expect(message.text()).atLeastOneToContain(['ERR_NAME_NOT_RESOLVED', 'ERR_CONNECTION_RESET']);",
           );
       }
-      if (id.endsWith('/navigation.spec.ts')) {
+      if (id.endsWith('/navigation.test.ts')) {
         return code
           .replace(
             "it('should work when subframe issues window.stop()', async function () {",
@@ -156,18 +157,18 @@ function remoteTestServerPlugin() {
           )
           .replace('timeout: this.timeout() - 1000,', 'timeout: testInfo.timeout - 1000,');
       }
-      if (!id.endsWith('/cookies.spec.ts')) {
+      if (!id.endsWith('/cookies.test.ts')) {
         return;
       }
 
       return code
         .replace(
-          "domain: 'localhost',\n        path: '/',\n        sameParty: false,\n        expires: -1,\n        httpOnly: false,\n        secure: false,\n        sourceScheme: 'Unset',",
-          "domain: new URL(server.EMPTY_PAGE).hostname,\n        path: '/',\n        sameParty: false,\n        expires: -1,\n        httpOnly: false,\n        secure: new URL(server.EMPTY_PAGE).protocol === 'https:',\n        sourceScheme: 'Unset',",
+          "domain: 'localhost',\n        path: '/',\n        expires: -1,\n        httpOnly: false,\n        secure: false,\n        sourceScheme: 'Unset',",
+          "domain: new URL(server.EMPTY_PAGE).hostname,\n        path: '/',\n        expires: -1,\n        httpOnly: false,\n        secure: new URL(server.EMPTY_PAGE).protocol === 'https:',\n        sourceScheme: 'Unset',",
         )
         .replace(
-          "domain: 'localhost',\n            path: '/',\n            sameParty: false,\n            expires: -1,\n            size: 14,\n            httpOnly: false,\n            secure: false,\n            session: true,\n            sourceScheme: 'Unset',",
-          "domain: new URL(server.EMPTY_PAGE).hostname,\n            path: '/',\n            sameParty: false,\n            expires: -1,\n            size: 14,\n            httpOnly: false,\n            secure: new URL(server.EMPTY_PAGE).protocol === 'https:',\n            session: true,\n            sourceScheme: 'Unset',",
+          "domain: 'localhost',\n            path: '/',\n            expires: -1,\n            size: 14,\n            httpOnly: false,\n            secure: false,\n            session: true,\n            sourceScheme: 'Unset',",
+          "domain: new URL(server.EMPTY_PAGE).hostname,\n            path: '/',\n            expires: -1,\n            size: 14,\n            httpOnly: false,\n            secure: new URL(server.EMPTY_PAGE).protocol === 'https:',\n            session: true,\n            sourceScheme: 'Unset',",
         )
         .replace(
           '      await expectCookieEquals(await page.cookies(), [\n        {\n          name: \'partitionCookie\',',
@@ -275,6 +276,11 @@ ${[...testFiles, ...cloudflareTestFiles]
         'fs': 'node:fs',
 
         './mocha-utils.js': path.resolve(
+          basedir,
+          '../tests/src/server/mocha-utils',
+        ),
+        // Tests in subdirectories, e.g. cdp/, import it from the parent.
+        '../mocha-utils.js': path.resolve(
           basedir,
           '../tests/src/server/mocha-utils',
         ),

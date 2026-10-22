@@ -7,11 +7,11 @@ const generatedDir = path.join(packageDir, '.types');
 const outputDir = path.join(packageDir, 'lib');
 const puppeteerTypesDir = path.resolve(
   packageDir,
-  '../../submodules/puppeteer/packages/puppeteer-core/lib/esm/puppeteer'
+  '../../submodules/puppeteer/packages/puppeteer-core/lib/puppeteer'
 );
 const thirdPartyTypesDir = path.resolve(
   packageDir,
-  '../../submodules/puppeteer/packages/puppeteer-core/lib/esm/third_party'
+  '../../submodules/puppeteer/packages/puppeteer-core/lib/third_party'
 );
 
 function replaceExactlyOnce(contents, search, replacement, source) {
@@ -61,8 +61,21 @@ export interface SupportedWebDriverCapabilities {
      * Headers to use for the web socket connection.
      * @remarks
      * Only works in the Node.js environment.
+     *
+     * @deprecated Use {@link WsOptions.headers} via
+     * {@link ConnectOptions.wsOptions} instead. When both are set,
+     * \`wsOptions.headers\` wins.
      */
     headers?: Record<string, string>;
+`;
+  const wsOptionsOption = `    /**
+     * Options for the WebSocket connection to the browser.
+     *
+     * @remarks
+     * Only used in the Node.js environment. The browser build has no ping frame
+     * API, so the keep-alive options are ignored there.
+     */
+    wsOptions?: WsOptions;
 `;
 
   contents = replaceExactlyOnce(
@@ -92,6 +105,7 @@ export interface SupportedWebDriverCapabilities {
     source
   );
   contents = replaceExactlyOnce(contents, capabilitiesOption, '', source);
+  contents = replaceExactlyOnce(contents, wsOptionsOption, '', source);
   return replaceExactlyOnce(contents, headersOption, '', source);
 }
 
@@ -121,6 +135,15 @@ function copyDeclarations(
       }
       if (relative === 'common/ConnectOptions.d.ts') {
         contents = sanitizeConnectOptions(contents, source);
+      } else if (relative === 'common/Debug.d.ts') {
+        // The Workers build has no BiDi, so drop its debug channel prefixes.
+        contents = replaceExactlyOnce(
+          contents,
+          '    readonly bidiSend: "puppeteer:webDriverBiDi:SEND ►";\n' +
+            '    readonly bidiReceive: "puppeteer:webDriverBiDi:RECV ◀";\n',
+          '',
+          source
+        );
       } else if (relative === 'index-browser.d.ts') {
         contents = replaceExactlyOnce(
           contents,

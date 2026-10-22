@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 import type {ConnectionTransport} from 'puppeteer-core/lib/common/ConnectionTransport.js';
-import {debugError} from 'puppeteer-core/lib/common/util.js';
+import {DEBUG_PREFIXES, debug} from 'puppeteer-core/lib/common/Debug.js';
 
 import {packageVersion} from '../packageVersion.js';
 import type {BrowserWorker} from './BrowserWorker.js';
@@ -76,7 +76,9 @@ export class WorkersWebSocketTransport implements ConnectionTransport {
     });
     this.ws.addEventListener('error', e => {
       const message = (e as ErrorEvent).message || 'Unknown error';
-      debugError(`WebSocket error: SessionID: ${sessionId} - ${message}`);
+      debug(DEBUG_PREFIXES.error)?.(
+        `WebSocket error: SessionID: ${sessionId} - ${message}`
+      );
     });
   }
 

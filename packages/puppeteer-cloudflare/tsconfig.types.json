@@ -9,7 +9,7 @@
     "outDir": ".types",
     "paths": {
       "devtools-protocol/types/protocol-mapping.js": ["../../submodules/puppeteer/packages/puppeteer-core/node_modules/devtools-protocol/types/protocol-mapping.d.ts"],
-      "puppeteer-core/lib/*": ["../../submodules/puppeteer/packages/puppeteer-core/lib/esm/puppeteer/*"]
+      "puppeteer-core/lib/*": ["../../submodules/puppeteer/packages/puppeteer-core/lib/puppeteer/*"]
     },
     "rootDir": "src"
   }
