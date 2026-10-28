@@ -336,13 +336,13 @@ test(`should keep a connected session open past keep_alive`, async () => {
       return setTimeout(resolve, 11000);
     });
     await fetchSingleSession(env.BROWSER, sessionId);
-    expect(browser.isConnected()).toBe(true);
+    expect(browser.connected).toBe(true);
 
     await new Promise(resolve => {
       return setTimeout(resolve, 5000);
     });
     await fetchSingleSession(env.BROWSER, sessionId);
-    expect(browser.isConnected()).toBe(true);
+    expect(browser.connected).toBe(true);
   } finally {
     await browser.close().catch(() => {});
   }
