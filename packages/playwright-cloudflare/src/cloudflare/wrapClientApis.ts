@@ -19,42 +19,32 @@
 // some types are commented out because they are not used in the extension
 // or they were not released in this version of Playwright
 
-import {
-  Browser,
-  BrowserContext,
-  BrowserType,
-  Clock,
-  ConsoleMessage,
-  Coverage,
-  Dialog,
-  Download,
-  // Electron,
-  // ElectronApplication,
-  Locator,
-  FrameLocator,
-  ElementHandle,
-  FileChooser,
-  TimeoutError,
-  Frame,
-  Keyboard,
-  Mouse,
-  Touchscreen,
-  JSHandle,
-  Route,
-  WebSocket,
-  WebSocketRoute,
-  APIRequest,
-  APIRequestContext,
-  APIResponse,
-  Page,
-  Selectors,
-  Tracing,
-  Video,
-  Worker,
-  CDPSession,
-  Playwright,
-  WebError,
-} from 'playwright-core/lib/client/api';
+import { Browser } from 'playwright-core/lib/client/browser';
+import { BrowserContext } from 'playwright-core/lib/client/browserContext';
+import { BrowserType } from 'playwright-core/lib/client/browserType';
+import { Clock } from 'playwright-core/lib/client/clock';
+import { ConsoleMessage } from 'playwright-core/lib/client/consoleMessage';
+import { Coverage } from 'playwright-core/lib/client/coverage';
+import { Dialog } from 'playwright-core/lib/client/dialog';
+import { Download } from 'playwright-core/lib/client/download';
+// import { Electron, ElectronApplication } from 'playwright-core/lib/client/electron';
+import { FrameLocator, Locator } from 'playwright-core/lib/client/locator';
+import { ElementHandle } from 'playwright-core/lib/client/elementHandle';
+import { FileChooser } from 'playwright-core/lib/client/fileChooser';
+import { TimeoutError } from 'playwright-core/lib/client/errors';
+import { Frame } from 'playwright-core/lib/client/frame';
+import { Keyboard, Mouse, Touchscreen } from 'playwright-core/lib/client/input';
+import { JSHandle } from 'playwright-core/lib/client/jsHandle';
+import { Route, WebSocket, WebSocketRoute } from 'playwright-core/lib/client/network';
+import { APIRequest, APIRequestContext, APIResponse } from 'playwright-core/lib/client/fetch';
+import { Page } from 'playwright-core/lib/client/page';
+import { Selectors } from 'playwright-core/lib/client/selectors';
+import { Tracing } from 'playwright-core/lib/client/tracing';
+import { Video } from 'playwright-core/lib/client/video';
+import { Worker } from 'playwright-core/lib/client/worker';
+import { CDPSession } from 'playwright-core/lib/client/cdpSession';
+import { Playwright } from 'playwright-core/lib/client/playwright';
+import { WebError } from 'playwright-core/lib/client/webError';
 
 import { apiCallZone } from './apiCallZone';
 
@@ -112,7 +102,7 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
   // androidWebView: [AndroidWebView.prototype],
   // androidInput: [AndroidInput.prototype],
   // androidSocket: [AndroidSocket.prototype],
-  browser: [Browser.prototype, { newContext: true, newPage: true, newBrowserCDPSession: true, startTracing: true, stopTracing: true, close: true }],
+  browser: [Browser.prototype, { newContext: true, newPage: true, newBrowserCDPSession: true, startTracing: true, stopTracing: true, close: true, bind: true, unbind: true }],
   browserContext: [BrowserContext.prototype, {
     newPage: true,
     cookies: true,
@@ -124,6 +114,7 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
     setExtraHTTPHeaders: true,
     setOffline: true,
     setHTTPCredentials: true,
+    setStorageState: true,
     addInitScript: true,
     exposeBinding: true,
     exposeFunction: true,
@@ -190,7 +181,11 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
     allInnerTexts: true,
     allTextContents: true,
     waitFor: true,
-    ariaSnapshot: true
+    ariaSnapshot: true,
+    drop: true,
+    normalize: true,
+    hideHighlight: true,
+    waitForFunction: true,
   }],
   frameLocator: [FrameLocator.prototype, {}],
   elementHandle: [ElementHandle.prototype, {
@@ -241,7 +236,7 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
     waitForSelector: true,
   }],
   fileChooser: [FileChooser.prototype, { setFiles: true }],
-  timeoutError: [TimeoutError.prototype, {}],
+  timeoutError: [TimeoutError.prototype, { details: false }],
   frame: [Frame.prototype, {
     goto: true,
     waitForNavigation: true,
@@ -298,7 +293,7 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
   webSocketRoute: [WebSocketRoute.prototype, { close: true }],
   request: [APIRequest.prototype, { newContext: true }],
   requestContext: [APIRequestContext.prototype, { dispose: true, delete: true, head: true, get: true, patch: true, post: true, put: true, fetch: true, storageState: true }],
-  response: [APIResponse.prototype, { body: true, json: true, text: true, dispose: true }],
+  response: [APIResponse.prototype, { body: true, json: true, text: true, dispose: true, securityDetails: true, serverAddr: true }],
   page: [Page.prototype, {
     opener: true,
     waitForSelector: true,
@@ -373,9 +368,15 @@ const apis: { [ApiK in keyof ApiTypeMap]: [ApiTypeMap[ApiK], { [K in KeysOfAsync
     consoleMessages: true,
     pageErrors: true,
     requests: true,
+    ariaSnapshot: true,
+    pickLocator: true,
+    cancelPickLocator: true,
+    hideHighlight: true,
+    clearConsoleMessages: true,
+    clearPageErrors: true,
   }],
   selectors: [Selectors.prototype, { register: true }],
-  tracing: [Tracing.prototype, { start: true, startChunk: true, stop: true, stopChunk: true, group: false, groupEnd: false }],
+  tracing: [Tracing.prototype, { start: true, startChunk: true, stop: true, stopChunk: true, group: false, groupEnd: false, startHar: true, stopHar: true }],
   video: [Video.prototype, { delete: true, path: true, saveAs: true }],
   worker: [Worker.prototype, { evaluate: true, evaluateHandle: true, waitForEvent: true }],
   session: [CDPSession.prototype, { send: true, detach: true }],

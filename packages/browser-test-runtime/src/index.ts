@@ -1,18 +1,18 @@
 import fs from 'fs';
 
+import {asLocatorDescription} from '@isomorphic/locatorGenerators';
+import {ManualPromise} from '@isomorphic/manualPromise';
 import {
-  asLocatorDescription,
-  currentZone,
-  ManualPromise,
+  getActionGroup,
   renderTitleForCall,
-  setTimeOrigin,
-  timeOrigin,
-} from 'playwright-core/lib/utils';
+} from '@isomorphic/protocolFormatter';
+import {setTimeOrigin, timeOrigin} from '@isomorphic/time';
+import {currentZone} from '@utils/zones';
 import {loadConfig} from 'playwright/lib/common/configLoader';
 import {
   currentTestInfo,
   setCurrentlyLoadingFileSuite,
-} from 'playwright/lib/common/globals';
+} from 'playwright/lib/globals';
 import {bindFileSuiteToProject} from 'playwright/lib/common/suiteUtils';
 import {Suite, TestCase} from 'playwright/lib/common/test';
 import {rootTestType} from 'playwright/lib/common/testType';
@@ -146,7 +146,8 @@ class TestWorker extends WorkerMain {
         configCLIOverrides: {timeout: 5000, ...options},
       },
       artifactsDir: '/tmp/tests',
-      recoverFromStepErrors: false,
+      pauseOnError: false,
+      pauseAtEnd: false,
     });
   }
 
@@ -219,7 +220,11 @@ export class TestRunner {
       const {retry} = this.testContext;
       const [result] = await Promise.all([
         worker.result(),
-        worker.runTestGroup({file, entries: [{testId, retry}]}),
+        // plan annotations are applied by the test runner, which does not run here
+        worker.runTestGroup({
+          file,
+          entries: [{testId, retry, planAnnotations: []}],
+        }),
       ]);
       if (
         result.status === 'failed' &&
@@ -254,7 +259,8 @@ const expectApiListener: ClientInstrumentationListener = {
     const zone = currentZone().data<TestStepInternal>('stepZone');
     if (zone?.category === 'expect') {
       if (zone.apiName) data.apiName = zone.apiName;
-      if (zone.title) data.title = zone.title;
+      if (zone.shortTitle || zone.title)
+        data.title = zone.shortTitle ?? zone.title;
       data.stepId = zone.stepId;
       return;
     }
@@ -271,6 +277,7 @@ const expectApiListener: ClientInstrumentationListener = {
         ),
         apiName: data.apiName,
         params: channel.params,
+        group: getActionGroup({type: channel.type, method: channel.method}),
       },
       tracingGroupSteps[tracingGroupSteps.length - 1],
     );

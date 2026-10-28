@@ -3,6 +3,14 @@ import path from 'path';
 import picomatch from 'picomatch';
 import { defineConfig } from 'vite';
 
+import {
+  playwrightBundleAliases,
+  playwrightCoreBundleAlias,
+  playwrightModuleMocks,
+  playwrightPathAliases,
+  playwrightVendoredImports,
+} from '../browser-test-runtime/utils/vite-playwright.js';
+
 const baseDir = __dirname.replace(/\\/g, '/');
 const browserTestRuntime = path.resolve(__dirname, '../browser-test-runtime');
 
@@ -18,11 +26,14 @@ const pathMappings = [
   { glob: '**/submodules/playwright/packages/playwright-core/*.json', target: 'playwright-core' },
   { glob: '**/submodules/playwright/packages/playwright/src/**', target: 'playwright' },
   { glob: '**/submodules/playwright/packages/playwright/*.json', target: 'playwright' },
+  { glob: '**/submodules/playwright/packages/utils/**', target: 'utils' },
+  { glob: '**/submodules/playwright/packages/isomorphic/**', target: 'isomorphic' },
+  { glob: '**/submodules/playwright/packages/protocol/src/**', target: 'protocol' },
 ];
 
 // Pre-compile globs to regexes (capture: true creates capture groups for **/*)
 const compiledMappings = pathMappings.map(({ glob, target }) => ({
-  regex: picomatch.makeRe(glob, { capture: true }),
+  regex: picomatch.makeRe(glob, { capture: true, dot: true }),
   target,
 }));
 
@@ -61,75 +72,74 @@ function remapOutputPath(facadeModuleId?: string): string {
   return '[name].js';
 }
 
+const aliases = {
+  'playwright-core/lib': path.resolve(__dirname, '../../submodules/playwright/packages/playwright-core/src'),
+  'playwright/lib': path.resolve(__dirname, '../../submodules/playwright/packages/playwright/src'),
+  'playwright-core': path.resolve(__dirname, './src/index'),
+
+  // https://workers-nodejs-compat-matrix.pages.dev/
+  'async_hooks': 'node:async_hooks',
+  'assert': 'node:assert',
+  'buffer': 'node:buffer',
+  'constants': 'node:constants',
+  'crypto': 'node:crypto',
+  'dns': 'node:dns',
+  'events': 'node:events',
+  'fs': 'node:fs',
+  'http': 'node:http',
+  'http2': 'node:http2',
+  'https': 'node:https',
+  'module': 'node:module',
+  'net': 'node:net',
+  'os': 'node:os',
+  'path': 'node:path',
+  'process': 'node:process',
+  'stream': 'node:stream',
+  'string_decoder': 'node:string_decoder',
+  'tls': 'node:tls',
+  'url': 'node:url',
+  'util': 'node:util',
+  'zlib': 'node:zlib',
+
+  "child_process": path.resolve(browserTestRuntime, './src/mocks/childProcess'),
+  "node:child_process": path.resolve(browserTestRuntime, './src/mocks/childProcess'),
+  "readline": path.resolve(browserTestRuntime, './src/mocks/readline'),
+  "node:readline": path.resolve(browserTestRuntime, './src/mocks/readline'),
+  "inspector": path.resolve(browserTestRuntime, './src/mocks/inspector'),
+  "node:inspector": path.resolve(browserTestRuntime, './src/mocks/inspector'),
+
+  // replace playwright transport with cloudflare workers transport
+  './transport': path.resolve(__dirname, './src/cloudflare/webSocketTransport'),
+  '../transport': path.resolve(__dirname, './src/cloudflare/webSocketTransport'),
+
+  // cloudflare-specific modules added by patch
+  '@playwright-cloudflare': path.resolve(__dirname, './src'),
+
+  // IMPORTANT `require('../playwright')` in `recorderApp.ts` causes a circular dependency,
+  // so we need to mock it (it's not needed, it's related with recorder).
+  '../playwright': path.resolve(browserTestRuntime, './src/mocks/empty'),
+  'electron/index.js': path.resolve(browserTestRuntime, './src/mocks/empty'),
+};
+
 // https://vitejs.dev/config/
 export default defineConfig({
-
+  plugins: [
+    playwrightModuleMocks({
+      // Workers do not load or transpile test files, and this way babelBundle is not bundled
+      'playwright/src/transform/transform': path.resolve(__dirname, './src/mocks/transform.ts'),
+      'playwright/src/transform/compilationCache': path.resolve(browserTestRuntime, './src/mocks/compilationCache.ts'),
+      'playwright/src/common/testLoader': path.resolve(__dirname, './src/mocks/testLoader.ts'),
+      'playwright-core/src/server/bidi/bidiOverCdp': path.resolve(browserTestRuntime, './src/mocks/empty.ts'),
+    }),
+    playwrightVendoredImports(),
+  ],
   resolve: {
-    alias: {
-      'playwright-core/lib': path.resolve(__dirname, '../../submodules/playwright/packages/playwright-core/src'),
-      'playwright/lib': path.resolve(__dirname, '../../submodules/playwright/packages/playwright/src'),
-      'playwright-core': path.resolve(__dirname, './src/index'),
-
-      // https://workers-nodejs-compat-matrix.pages.dev/
-      'async_hooks': 'node:async_hooks',
-      'assert': 'node:assert',
-      'buffer': 'node:buffer',
-      'constants': 'node:constants',
-      'crypto': 'node:crypto',
-      'dns': 'node:dns',
-      'events': 'node:events',
-      'fs': 'node:fs',
-      'http': 'node:http',
-      'http2': 'node:http2',
-      'https': 'node:https',
-      'module': 'node:module',
-      'net': 'node:net',
-      'os': 'node:os',
-      'path': 'node:path',
-      'process': 'node:process',
-      'stream': 'node:stream',
-      'string_decoder': 'node:string_decoder',
-      'tls': 'node:tls',
-      'url': 'node:url',
-      'util': 'node:util',
-      'zlib': 'node:zlib',
-
-      // bundles
-      './utilsBundleImpl': path.resolve(__dirname, '../browser-test-runtime/src/bundles/utilsBundleImpl'),
-      './zipBundleImpl': path.resolve(__dirname, '../browser-test-runtime/src/bundles/zipBundleImpl'),
-      './mcpBundleImpl': path.resolve(__dirname, '../browser-test-runtime/src/bundles/mcpBundleImpl'),
-      './expectBundleImpl': path.resolve(__dirname, '../browser-test-runtime/src/bundles/expectBundleImpl'),
-      'pngjs': path.resolve(__dirname, '../browser-test-runtime/src/bundles/pngjs'),
-
-      "child_process": path.resolve(browserTestRuntime, './src/mocks/childProcess'),
-      "node:child_process": path.resolve(browserTestRuntime, './src/mocks/childProcess'),
-      "readline": path.resolve(browserTestRuntime, './src/mocks/readline'),
-      "node:readline": path.resolve(browserTestRuntime, './src/mocks/readline'),
-      "inspector": path.resolve(browserTestRuntime, './src/mocks/inspector'),
-      "node:inspector": path.resolve(browserTestRuntime, './src/mocks/inspector'),
-
-      // replace playwright transport with cloudflare workers transport
-      './transport': path.resolve(__dirname, './src/cloudflare/webSocketTransport'),
-      '../transport': path.resolve(__dirname, './src/cloudflare/webSocketTransport'),
-
-      // cloudflare-specific modules added by patch
-      '@playwright-cloudflare': path.resolve(__dirname, './src'),
-
-      // It's not needed and this way we don't need to build and import utilsBundleImpl and babelBundleImpl
-      './transform': path.resolve(__dirname, './src/mocks/transform'),
-      '../transform/transform': path.resolve(__dirname, './src/mocks/transform'),
-
-      '../transform/compilationCache': path.resolve(browserTestRuntime, './src/mocks/compilationCache'),
-      '../common/testLoader': path.resolve(__dirname, './src/mocks/testLoader'),
-      '../common/esmLoaderHost': path.resolve(browserTestRuntime, './src/mocks/esmLoaderHost'),
-      './esmLoaderHost': path.resolve(browserTestRuntime, './src/mocks/esmLoaderHost'),
-
-      // IMPORTANT `require('../playwright')` in `recorderApp.ts` causes a circular dependency,
-      // so we need to mock it (it's not needed, it's related with recorder).
-      '../playwright': path.resolve(browserTestRuntime, './src/mocks/empty'),
-      './bidiOverCdp': path.resolve(browserTestRuntime, './src/mocks/empty'),
-      'electron/index.js': path.resolve(browserTestRuntime, './src/mocks/empty'),
-    },
+    alias: [
+      playwrightCoreBundleAlias,
+      ...Object.entries(aliases).map(([find, replacement]) => ({ find, replacement })),
+      ...playwrightPathAliases,
+      ...playwrightBundleAliases,
+    ],
   },
   define: {
     '__dirname': `'${baseDir}'`,
@@ -182,6 +192,7 @@ export default defineConfig({
         'node:url',
         'node:util',
         'node:zlib',
+        /^node:/,
         'cloudflare:workers',
       ]
     },
@@ -194,6 +205,9 @@ export default defineConfig({
       include: [
         path.resolve(__dirname, '../../submodules/playwright/packages/playwright-core/src/**/*'),
         path.resolve(__dirname, '../../submodules/playwright/packages/playwright/src/**/*'),
+        path.resolve(__dirname, '../../submodules/playwright/packages/utils/**/*'),
+        path.resolve(__dirname, '../../submodules/playwright/packages/isomorphic/**/*'),
+        path.resolve(__dirname, '../../submodules/playwright/packages/protocol/src/**/*'),
         /node_modules/,
       ],
     }
