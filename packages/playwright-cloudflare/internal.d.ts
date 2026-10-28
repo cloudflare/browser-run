@@ -8,3 +8,5 @@ interface Debug {
 
 export const debug: Debug;
 export function isUnderTest(): boolean;
+export function getPlaywrightVersion(majorMinorOnly?: boolean): string;
+export function getUserAgent(): string;

@@ -22,6 +22,10 @@ export const skipTests: string[] = [
   'library/browsercontext-viewport.spec.ts > should set window.screen.orientation.type for mobile devices',
   'library/capabilities.spec.ts > should not auto play audio',
   'library/capabilities.spec.ts > should not crash on feature detection for PublicKeyCredential',
+  // These load the assets with a file:// URL, which the remote browser cannot open. Upstream
+  // v1.58 skipped them in service mode, v1.62 does not.
+  'library/capabilities.spec.ts > should play video @smoke',
+  'library/capabilities.spec.ts > should play webm video @smoke',
   'library/download.spec.ts > should be able to download a inline PDF file via response interception',
   'library/download.spec.ts > should be able to download a PDF file',
   'library/har.spec.ts > should attach content',
@@ -33,6 +37,11 @@ export const skipTests: string[] = [
   'library/har.spec.ts > should report the correct response body size when the bodySize is 0',
   'library/ignorehttpserrors.spec.ts > should isolate contexts',
   'library/ignorehttpserrors.spec.ts > should isolated contexts that share network process',
+  // The test source locations are not available in the bundled Worker tests.
+  'library/debugger.spec.ts > should pause at next and resume',
+  'library/debugger.spec.ts > should run to location',
+  // Also fails on main (v1.58) in the full suite against the deployed test Worker.
+  'library/geolocation.spec.ts > should use context options for popup',
   'library/page-event-crash.spec.ts > should emit crash event when page crashes',
   'library/page-event-crash.spec.ts > should be able to close context when page crashes',
   'library/page-event-crash.spec.ts > should cancel waitForEvent when page crashes',
@@ -64,6 +73,8 @@ export const skipTests: string[] = [
   'library/emulation-focus.spec.ts > should not affect screenshots',
   'library/shared-worker.spec.ts > should survive shared worker restart',
   'library/tracing.spec.ts > should include context API requests',
+  // Reads the local artifacts folder. Upstream v1.58 skipped it in service mode, v1.62 does not.
+  'library/tracing.spec.ts > should not flush console events',
   'page/elementhandle-screenshot.spec.ts > element screenshot > should capture full element when larger than viewport',
   'page/expect-boolean.spec.ts > toBeChecked > fail missing',
   'page/expect-boolean.spec.ts > toBeChecked > fail with checked:false',
@@ -93,17 +104,34 @@ export const skipTests: string[] = [
   // Cache interception relies on a local history lifecycle that remote sessions do not expose.
   'page/interception.spec.ts > should disable memory cache when intercepting',
   'page/locator-misc-1.spec.ts > should upload the file',
+  // Also fails on main (v1.58) in the full suite against the deployed test Worker.
+  'page/page-add-locator-handler.spec.ts > should work',
   'page/page-autowaiting-no-hang.spec.ts > assigning location to about:blank',
   'page/page-basic.spec.ts > should have sane user agent',
+  // New in v1.62. The result depends on the Browser Run browser: these pass with wrangler dev,
+  // but fail against the deployed test Worker. (hover: hover) needs the --blink-settings flags
+  // that Playwright passes when it launches a headless browser. 20 page.requestGC() calls exceed
+  // the test timeout.
+  'page/page-emulate-media.spec.ts > should report hover and fine pointer for desktop',
+  'page/page-evaluate.spec.ts > promise collected',
   'page/page-evaluate.spec.ts > should respect use strict expression',
   'page/page-evaluate.spec.ts > should work with function shorthands',
   'page/page-event-popup.spec.ts > should be able to capture alert',
+  // The test creates large files in the Worker, and the Worker throws an exception. Upstream
+  // v1.58 skipped these tests in service mode, v1.62 does not.
+  'page/page-filechooser.spec.ts > should upload multiple large files',
   'page/page-goto.spec.ts > should fail when main resources failed to load',
   'page/page-goto.spec.ts > should fail when navigating to bad SSL',
   // The Worker fixture is HTTPS-only, so it cannot exercise implicit HTTP URL completion.
   'page/page-goto.spec.ts > should use http for no protocol',
   // The Worker fixture cannot emulate the separate failing HTTPS server used by this test.
   'page/page-goto.spec.ts > should fail when navigating and show the url at the error message',
+  // Browser Run blocks file:// URLs (net::ERR_BLOCKED_BY_ADMINISTRATOR). Upstream v1.58 skipped
+  // these tests in service mode, v1.62 does not.
+  'page/page-goto.spec.ts > should work with file URL',
+  'page/page-goto.spec.ts > should work with file URL with subframes',
+  'page/page-history.spec.ts > page.goBack should work for file urls',
+  'page/page-network-response.spec.ts > should provide a Response with a file URL',
   // Browser Rendering does not expose a stable back-forward cache lifecycle.
   'page/page-history.spec.ts > goBack/goForward should work with bfcache-able pages',
   // Browser Rendering does not preserve renderer-initiated history entries reliably.
@@ -115,12 +143,24 @@ export const skipTests: string[] = [
   'page/page-network-sizes.spec.ts > should set bodySize to 0 when there was no response body',
   'page/page-request-intercept.spec.ts > should fulfill intercepted response using alias',
   'page/page-request-intercept.spec.ts > should give access to the intercepted response',
+  // Also fails on main (v1.58) with a page teardown timeout. route.continue fails the same way.
+  'page/page-route.spec.ts > route.fulfill should throw if called twice',
+  'page/page-route.spec.ts > route.continue should throw if called twice',
+  // Also fails on main (v1.58) in the full suite against the deployed test Worker.
+  'page/page-screenshot.spec.ts > page screenshot > should take fullPage screenshots during navigation',
   'page/page-screenshot.spec.ts > page screenshot animations > should wait for fonts to load',
+  // WebP snapshot comparison loads a WASM codec from the file system, which Workers cannot do.
+  // Page.screenshot({ type: 'webp' }) works, because Chromium encodes the image.
+  'page/page-screenshot.spec.ts > page screenshot > should produce a valid webp screenshot',
+  'page/page-screenshot.spec.ts > page screenshot > path option should detect webp',
   'page/page-set-input-files.spec.ts > should throw an error if the file does not exist',
   'page/page-set-input-files.spec.ts > should upload a file after popup',
   'page/page-set-input-files.spec.ts > should upload a folder',
   'page/page-set-input-files.spec.ts > should upload the file with spaces in name',
   'page/page-set-input-files.spec.ts > should upload the file',
+  // See page-filechooser.spec.ts > should upload multiple large files.
+  'page/page-set-input-files.spec.ts > should upload large file',
+  'page/page-set-input-files.spec.ts > should upload large file with relative path',
   'page/page-wait-for-navigation.spec.ts > should work with clicking on links which do not commit navigation',
   'page/page-wait-for-response.spec.ts > should work with re-rendered cached IMG elements',
   'page/page-wait-for-selector-2.spec.ts > should have correct stack trace for timeout',
@@ -135,6 +175,9 @@ export const skipTests: string[] = [
   'page/workers.spec.ts > Page.workers @smoke',
   'page/workers.spec.ts > should emit created and destroyed events',
   'page/workers.spec.ts > should report worker script as network request',
+  // server.waitForRequest skips the test while page.waitForEvent('worker') is still pending. The
+  // pending wait then rejects during teardown and fails the test.
+  'page/workers.spec.ts > should support extra http headers',
 ];
 
 export const skipErrorMessages: Array<string | RegExp> = [

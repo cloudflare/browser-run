@@ -103,6 +103,10 @@ class TestServer {
     this._testInfo.skip(true, 'setRoute not supported, skipping');
   }
 
+  setContent() {
+    this._testInfo.skip(true, 'setContent not supported, skipping');
+  }
+
   waitForRequest() {
     this._testInfo.skip(true, 'waitForRequest not supported, skipping');
   }
@@ -113,6 +117,10 @@ class TestServer {
 
   waitForWebSocket() {
     this._testInfo.skip(true, 'waitForWebSocket not supported, skipping');
+  }
+
+  waitForWebSocketConnectionRequest() {
+    this._testInfo.skip(true, 'waitForWebSocketConnectionRequest not supported, skipping');
   }
 
   enableGzip() {
@@ -174,6 +182,7 @@ export type BrowserTestWorkerFixtures = PageWorkerFixtures & {
   isAndroid: boolean;
   isElectron: boolean;
   isHeadlessShell: boolean;
+  isFrozenWebkit: boolean;
   nodeVersion: { major: number, minor: number, patch: number };
   isBidi: boolean;
 };
@@ -269,6 +278,7 @@ export const test = platformTest.extend<PageTestFixtures & ServerFixtures & Test
   isWebView2: [false, { scope: 'worker' }],
   electronMajorVersion: [0, { scope: 'worker' }],
   isHeadlessShell: [false, { scope: 'worker' }],
+  isFrozenWebkit: [false, { scope: 'worker' }],
   nodeVersion: [{ major: 20, minor: 0, patch: 0 }, { scope: 'worker' }],
   isBidi: [false, { scope: 'worker' }],
 
