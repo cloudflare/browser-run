@@ -2,7 +2,10 @@ import fs from 'fs';
 
 import {asLocatorDescription} from '@isomorphic/locatorGenerators';
 import {ManualPromise} from '@isomorphic/manualPromise';
-import {renderTitleForCall} from '@isomorphic/protocolFormatter';
+import {
+  getActionGroup,
+  renderTitleForCall,
+} from '@isomorphic/protocolFormatter';
 import {setTimeOrigin, timeOrigin} from '@isomorphic/time';
 import {currentZone} from '@utils/zones';
 import {loadConfig} from 'playwright/lib/common/configLoader';
@@ -256,7 +259,8 @@ const expectApiListener: ClientInstrumentationListener = {
     const zone = currentZone().data<TestStepInternal>('stepZone');
     if (zone?.category === 'expect') {
       if (zone.apiName) data.apiName = zone.apiName;
-      if (zone.title) data.title = zone.title;
+      if (zone.shortTitle || zone.title)
+        data.title = zone.shortTitle ?? zone.title;
       data.stepId = zone.stepId;
       return;
     }
@@ -273,6 +277,7 @@ const expectApiListener: ClientInstrumentationListener = {
         ),
         apiName: data.apiName,
         params: channel.params,
+        group: getActionGroup({type: channel.type, method: channel.method}),
       },
       tracingGroupSteps[tracingGroupSteps.length - 1],
     );

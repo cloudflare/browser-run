@@ -3,6 +3,8 @@ import fs from 'fs';
 
 import { defineConfig, Plugin } from 'vite';
 
+import { playwrightPathAliases, playwrightVendoredImports, playwrightDir } from '../../browser-test-runtime/utils/vite-playwright.js';
+
 const basedir = __dirname.replace(/\\/g, '/');
 const cloudflareSourceTestsDir = path.join(basedir, 'src');
 const sourceTestsDir = path.join(basedir, '..', '..', '..', 'submodules', 'playwright', 'tests');
@@ -54,10 +56,22 @@ function setTestFilePlugin() {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [setTestFilePlugin(), resolvePlaywrightPackageImports()],
+  plugins: [
+    setTestFilePlugin(),
+    resolvePlaywrightPackageImports(),
+    // npm dependencies of upstream sources come from the utilsBundle exports of @cloudflare/playwright/internal
+    playwrightVendoredImports({
+      target: '@cloudflare/playwright/internal',
+      external: true,
+      include: [path.join(playwrightDir, 'packages'), sourceTestsDir],
+    }),
+  ],
   root: sourceTestsDir,
   resolve: {
-    alias: {
+    alias: [
+      // upstream tests import parts of playwright-core through this barrel
+      { find: /^(\.\.\/)+packages\/playwright-core\/lib\/coreBundle$/, replacement: path.resolve(basedir, './src/server/coreBundle') },
+      ...Object.entries({
       // https://workers-nodejs-compat-matrix.pages.dev/
       'async_hooks': 'node:async_hooks',
       'assert': 'node:assert',
@@ -109,9 +123,9 @@ export default defineConfig({
       'playwright': '@cloudflare/playwright',
       'playwright-core': '@cloudflare/playwright',
       '@playwright/test': path.resolve(basedir, './src/server/workerFixtures'),
-      '@isomorphic': path.resolve(basedir, '../../../submodules/playwright/packages/playwright-core/src/utils/isomorphic'),
-      '@testIsomorphic': path.resolve(basedir, '../../../submodules/playwright/packages/playwright/src/isomorphic'),
-    },
+      }).map(([find, replacement]) => ({ find, replacement })),
+      ...playwrightPathAliases,
+    ],
   },
   build: {
     emptyOutDir: false,
