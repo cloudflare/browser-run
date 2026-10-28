@@ -50,9 +50,7 @@
     "test:merge": "cd tests && npx playwright merge-reports --reporter html ./all-blob-reports"
   },
   "dependencies": {
-    "@types/debug": "^4.1.12",
     "@types/node": "^18.17.15",
-    "debug": "^4.4.3",
     "devtools-protocol": "0.0.1666840",
     "mitt": "3.0.1",
     "parsel-js": "1.2.2",
