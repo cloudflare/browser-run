@@ -1,8 +1,8 @@
 diff --git a/packages/playwright-core/src/client/browser.ts b/packages/playwright-core/src/client/browser.ts
-index f4b803891..457006a6a 100644
+index 368e518bb..c198ff67d 100644
 --- a/packages/playwright-core/src/client/browser.ts
 +++ b/packages/playwright-core/src/client/browser.ts
-@@ -55,7 +55,13 @@ export class Browser extends ChannelOwner<channels.BrowserChannel> implements ap
+@@ -60,7 +60,13 @@ export class Browser extends ChannelOwner<channels.BrowserChannel> implements ap
      return this._browserType;
    }
  
@@ -18,36 +18,36 @@ index f4b803891..457006a6a 100644
    }
  
 diff --git a/packages/playwright-core/src/client/channelOwner.ts b/packages/playwright-core/src/client/channelOwner.ts
-index 7bd097b3f..33af318f8 100644
+index f6ed9d166..07faa7d31 100644
 --- a/packages/playwright-core/src/client/channelOwner.ts
 +++ b/packages/playwright-core/src/client/channelOwner.ts
-@@ -19,6 +19,7 @@ import { ValidationError, maybeFindValidator  } from '../protocol/validator';
- import { methodMetainfo } from '../utils/isomorphic/protocolMetainfo';
+@@ -22,6 +22,7 @@ import { currentZone } from '@utils/zones';
+ import { ValidationError, maybeFindValidator } from '@protocol/validator';
+ import { EventEmitter } from './eventEmitter';
  import { captureLibraryStackTrace } from './clientStackTrace';
- import { stringifyStackFrames } from '../utils/isomorphic/stackTrace';
 +import { apiCallZone } from '@playwright-cloudflare/cloudflare/apiCallZone';
  
  import type { ClientInstrumentation } from './clientInstrumentation';
  import type { Connection } from './connection';
-@@ -179,8 +180,10 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
+@@ -192,8 +193,10 @@ export abstract class ChannelOwner<T extends channels.Channel = channels.Channel
      if (existingApiZone)
        return await func(existingApiZone);
  
 +    const apiCall = apiCallZone.getStore();
 +
-     const stackTrace = captureLibraryStackTrace(this._platform);
+     const stackTrace = captureLibraryStackTrace();
 -    const apiZone: ApiZone = { title: options?.title, apiName: stackTrace.apiName, frames: stackTrace.frames, internal: options?.internal ?? false, reported: false, userData: undefined, stepId: undefined };
 +    const apiZone: ApiZone = { title: options?.title, apiName: apiCall?.apiName ?? stackTrace.apiName, frames: stackTrace.frames, internal: options?.internal ?? false, reported: false, userData: undefined, stepId: undefined };
  
      try {
-       const result = await this._platform.zones.current().push(apiZone).run(async () => await func(apiZone));
+       const result = await currentZone().with('apiZone', apiZone).run(async () => await func(apiZone));
 diff --git a/packages/playwright-core/src/client/clientHelper.ts b/packages/playwright-core/src/client/clientHelper.ts
-index 6c9b8aad1..9233f26ce 100644
+index 89037e342..2b2cb7ce3 100644
 --- a/packages/playwright-core/src/client/clientHelper.ts
 +++ b/packages/playwright-core/src/client/clientHelper.ts
-@@ -30,7 +30,9 @@ export function envObjectToArray(env: NodeJS.ProcessEnv): { name: string, value:
+@@ -32,7 +32,9 @@ export function envObjectToArray(env: NodeJS.ProcessEnv): { name: string, value:
  
- export async function evaluationScript(platform: Platform, fun: Function | string | { path?: string, content?: string }, arg?: any, addSourceUrl: boolean = true): Promise<string> {
+ export async function evaluationScript(fun: Function | string | { path?: string, content?: string }, arg?: any, addSourceUrl: boolean = true): Promise<string> {
    if (typeof fun === 'function') {
 -    const source = fun.toString();
 +    // function is most likely bundled with wrangler, which uses esbuild with keepNames enabled.
@@ -56,38 +56,81 @@ index 6c9b8aad1..9233f26ce 100644
      const argString = Object.is(arg, undefined) ? 'undefined' : JSON.stringify(arg);
      return `(${source})(${argString})`;
    }
+@@ -64,7 +66,10 @@ export async function initScriptSourceWithExposedFunctions(fun: Function, arg: a
+   await Promise.all(exposePromises);
+   // Bindings backing the functions are registered through their own init scripts
+   // that are guaranteed to run first, so the controller is available here.
+-  return `(${fun.toString()})(globalThis['${kBindingsControllerProperty}'].parseInitScriptArg(${JSON.stringify(serialized)}))`;
++  // function is most likely bundled with wrangler, which uses esbuild with keepNames enabled.
++  // See: https://github.com/cloudflare/workers-sdk/issues/7107
++  const source = `((__name => (${fun.toString()}))(t => t))`;
++  return `(${source})(globalThis['${kBindingsControllerProperty}'].parseInitScriptArg(${JSON.stringify(serialized)}))`;
+ }
+ 
+ export function addSourceUrlToScript(source: string, path: string): string {
+diff --git a/packages/playwright-core/src/package.ts b/packages/playwright-core/src/package.ts
+index 180f16392..2e2bbee9b 100644
+--- a/packages/playwright-core/src/package.ts
++++ b/packages/playwright-core/src/package.ts
+@@ -19,7 +19,8 @@ import path from 'path';
+ // Use a dynamic path so esbuild does not statically resolve and inline
+ // package.json into coreBundle.js.
+ export const packageRoot = path.join(__dirname, '..');
+-export const packageJSON = require(path.join(packageRoot, 'package.json'));
++// PATCH static require, so the bundler can include package.json (Workers cannot read it at runtime)
++export const packageJSON = require('../package.json');
+ export const binPath = path.join(packageRoot, 'bin');
+ 
+ export function libPath(...parts: string[]): string {
 diff --git a/packages/playwright-core/src/server/chromium/chromium.ts b/packages/playwright-core/src/server/chromium/chromium.ts
-index bcc69d40f..ec9f63d44 100644
+index 68d0a9096..57671e7f5 100644
 --- a/packages/playwright-core/src/server/chromium/chromium.ts
 +++ b/packages/playwright-core/src/server/chromium/chromium.ts
-@@ -108,7 +108,9 @@ export class Chromium extends BrowserType {
-       chromeTransport = await WebSocketTransport.connect(progress, wsEndpoint, { headers: headersMap });
+@@ -112,10 +112,12 @@ export class Chromium extends BrowserType {
+       throw e;
+     }
+     const closeAndWait = async () => await chromeTransport.closeAndWait();
+-    return this._connectOverCDPImpl(progress, chromeTransport, closeAndWait, options, onClose);
++    // Only connections with ?persistent in the endpoint URL get a persistent default context.
++    const persistent = new URL(endpointURL).searchParams.has('persistent');
++    return this._connectOverCDPImpl(progress, chromeTransport, closeAndWait, { ...options, persistent }, onClose);
+   }
  
+-  private async _connectOverCDPImpl(progress: Progress, transport: ConnectionTransport, closeAndWait: () => Promise<void>, options: types.LaunchOptions & { isLocal?: boolean, noDefaults?: boolean, artifactsDir?: string }, onClose?: () => Promise<void>) {
++  private async _connectOverCDPImpl(progress: Progress, transport: ConnectionTransport, closeAndWait: () => Promise<void>, options: types.LaunchOptions & { isLocal?: boolean, noDefaults?: boolean, artifactsDir?: string, persistent?: boolean }, onClose?: () => Promise<void>) {
+     let artifactsDir: string;
+     const tempDirectories: string[] = [];
+     if (options.artifactsDir) {
+@@ -138,8 +140,10 @@ export class Chromium extends BrowserType {
+ 
+     try {
        const browserProcess: BrowserProcess = { close: doClose, kill: doClose };
--      const persistent: types.BrowserContextOptions = { noDefaultViewport: true };
+-      const persistent: types.BrowserContextOptions = {
+-        noDefaultViewport: true,
 +      // in cloudflare workers, noDefaultViewport will set height to 1px, which is not what we want
 +      const noDefaultViewport = globalThis.navigator?.userAgent !== 'Cloudflare-Workers';
-+      const persistent = new URL(endpointURL).searchParams.has('persistent') ? { noDefaultViewport } : undefined;
++      const persistent: types.BrowserContextOptions | undefined = options.persistent === false ? undefined : {
++        noDefaultViewport,
+         ...(options.noDefaults ? { acceptDownloads: 'internal-browser-default' as const } : {}),
+       };
        const browserOptions: BrowserOptions = {
-         slowMo: options.slowMo,
-         name: 'chromium',
-@@ -122,7 +124,8 @@ export class Chromium extends BrowserType {
-         tracesDir: options.tracesDir || artifactsDir,
+@@ -156,7 +160,8 @@ export class Chromium extends BrowserType {
          originalLaunchOptions: {},
+         noDefaults: options.noDefaults,
        };
 -      validateBrowserContextOptions(persistent, browserOptions);
 +      if (persistent)
 +        validateBrowserContextOptions(persistent, browserOptions);
-       const browser = await progress.race(CRBrowser.connect(this.attribution.playwright, chromeTransport, browserOptions));
+       const browser = await progress.race(CRBrowser.connect(this.attribution.playwright, transport, browserOptions));
        if (!options.isLocal)
-         browser._isCollocatedWithServer = false;
+         browser._isBrowserCollocatedWithServer = false;
 diff --git a/packages/playwright-core/src/server/chromium/crBrowser.ts b/packages/playwright-core/src/server/chromium/crBrowser.ts
-index 83cb12d2e..1ba89f4aa 100644
+index ba563a4b5..03b9b8da2 100644
 --- a/packages/playwright-core/src/server/chromium/crBrowser.ts
 +++ b/packages/playwright-core/src/server/chromium/crBrowser.ts
-@@ -557,6 +557,9 @@ export class CRBrowserContext extends BrowserContext<CREventsMap> {
-       return;
-     }
+@@ -562,6 +562,9 @@ export class CRBrowserContext extends BrowserContext<CREventsMap> {
+     // Ongoing downloads cause crashes in Edge, so cancel them first.
+     await Promise.all([...this._downloads].map(download => download.cancel().catch(() => {})));
  
 +    // PATCH ensure all pages are closed before closing the context
 +    await Promise.all(this._crPages().map(page => page.closePage(true))).catch(() => {});
@@ -96,7 +139,7 @@ index 83cb12d2e..1ba89f4aa 100644
      this._browser._contexts.delete(this._browserContextId);
      for (const [targetId, serviceWorker] of this._browser._serviceWorkers) {
 diff --git a/packages/playwright-core/src/server/chromium/crDragDrop.ts b/packages/playwright-core/src/server/chromium/crDragDrop.ts
-index 893968917..db81281b3 100644
+index e104741a9..453e60721 100644
 --- a/packages/playwright-core/src/server/chromium/crDragDrop.ts
 +++ b/packages/playwright-core/src/server/chromium/crDragDrop.ts
 @@ -93,7 +93,8 @@ export class DragManager {
@@ -107,13 +150,13 @@ index 893968917..db81281b3 100644
 +      const scriptSource = `((__name => (${setupDragListeners.toString()}))(t => t))`;
 +      await progress.race(this._crPage._page.safeNonStallingEvaluateInAllFrames(`(${scriptSource})()`, 'utility'));
        client.on('Input.dragIntercepted', onDragIntercepted!);
-       await client.send('Input.setInterceptDrags', { enabled: true });
+       await progress.race(client.send('Input.setInterceptDrags', { enabled: true }));
        try {
 diff --git a/packages/playwright-core/src/server/chromium/crNetworkManager.ts b/packages/playwright-core/src/server/chromium/crNetworkManager.ts
-index f6d338470..d3a1f0346 100644
+index 1c720b582..8b5523403 100644
 --- a/packages/playwright-core/src/server/chromium/crNetworkManager.ts
 +++ b/packages/playwright-core/src/server/chromium/crNetworkManager.ts
-@@ -531,6 +531,15 @@ export class CRNetworkManager {
+@@ -515,6 +515,15 @@ export class CRNetworkManager {
        return;
      this._maybeUpdateRequestSession(sessionInfo, request);
      const response = request.request._existingResponse();
@@ -130,10 +173,10 @@ index f6d338470..d3a1f0346 100644
        response.setTransferSize(null);
        response.setEncodedBodySize(null);
 diff --git a/packages/playwright-core/src/server/chromium/crPage.ts b/packages/playwright-core/src/server/chromium/crPage.ts
-index 2cb3df967..ab3207f8a 100644
+index b462b0b22..cefe2e862 100644
 --- a/packages/playwright-core/src/server/chromium/crPage.ts
 +++ b/packages/playwright-core/src/server/chromium/crPage.ts
-@@ -552,6 +552,10 @@ class FrameSession {
+@@ -566,6 +566,10 @@ class FrameSession {
      const response = await this._client.send('Page.navigate', { url, referrer, frameId: frame._id, referrerPolicy: 'unsafeUrl' });
      if (response.isDownload)
        throw new frames.NavigationAbortedError(response.loaderId, 'Download is starting');
@@ -144,50 +187,11 @@ index 2cb3df967..ab3207f8a 100644
      if (response.errorText)
        throw new frames.NavigationAbortedError(response.loaderId, `${response.errorText} at ${url}`);
      return { newDocumentId: response.loaderId };
-diff --git a/packages/playwright-core/src/server/dispatchers/pageDispatcher.ts b/packages/playwright-core/src/server/dispatchers/pageDispatcher.ts
-index 22f65daf0..38976e072 100644
---- a/packages/playwright-core/src/server/dispatchers/pageDispatcher.ts
-+++ b/packages/playwright-core/src/server/dispatchers/pageDispatcher.ts
-@@ -27,7 +27,8 @@ import { RouteDispatcher, WebSocketDispatcher } from './networkDispatchers';
- import { WebSocketRouteDispatcher } from './webSocketRouteDispatcher';
- import { SdkObject } from '../instrumentation';
- import { urlMatches } from '../../utils/isomorphic/urlMatch';
--import { PageAgentDispatcher } from './pageAgentDispatcher';
-+// TODO enable in the future
-+// import { PageAgentDispatcher } from './pageAgentDispatcher';
- 
- import type { Artifact } from '../artifact';
- import type { BrowserContext } from '../browserContext';
-@@ -362,7 +363,8 @@ export class PageDispatcher extends Dispatcher<Page, channels.PageChannel, Brows
-   }
- 
-   async agent(params: channels.PageAgentParams, progress: Progress): Promise<channels.PageAgentResult> {
--    return { agent: new PageAgentDispatcher(this, params) };
-+    // return { agent: new PageAgentDispatcher(this, params) };
-+    throw new Error('Agent not implemented');
-   }
- 
-   _onFrameAttached(frame: Frame) {
-diff --git a/packages/playwright-core/src/server/har/harRecorder.ts b/packages/playwright-core/src/server/har/harRecorder.ts
-index 7d99a3779..fefdcd98e 100644
---- a/packages/playwright-core/src/server/har/harRecorder.ts
-+++ b/packages/playwright-core/src/server/har/harRecorder.ts
-@@ -86,7 +86,9 @@ export class HarRecorder implements HarTracerDelegate {
-       (this._zipFile as unknown as EventEmitter).on('error', error => result.reject(error));
-       this._zipFile.addBuffer(Buffer.from(harFileContent, 'utf-8'), 'har.har');
-       this._zipFile.end();
--      this._zipFile.outputStream.pipe(fs.createWriteStream(this._artifact.localPath())).on('close', () => {
-+      const chunks: Buffer[] = [];
-+      this._zipFile.outputStream.on('data', data => chunks.push(data)).on('close', () => {
-+        fs.writeFileSync(this._artifact.localPath(), Buffer.concat(chunks));
-         result.resolve();
-       });
-       await result;
 diff --git a/packages/playwright-core/src/server/javascript.ts b/packages/playwright-core/src/server/javascript.ts
-index bc9261b8d..fe61e610f 100644
+index 17aaf1683..b60703b6d 100644
 --- a/packages/playwright-core/src/server/javascript.ts
 +++ b/packages/playwright-core/src/server/javascript.ts
-@@ -285,24 +285,77 @@ export function parseUnserializableValue(unserializableValue: string): any {
+@@ -303,24 +303,77 @@ export function parseUnserializableValue(unserializableValue: string): any {
      return -0;
  }
  
@@ -279,10 +283,10 @@ index bc9261b8d..fe61e610f 100644
      }
    }
 diff --git a/packages/playwright-core/src/server/localUtils.ts b/packages/playwright-core/src/server/localUtils.ts
-index 685a0f64f..cea0c1018 100644
+index c2b36758a..469aba38b 100644
 --- a/packages/playwright-core/src/server/localUtils.ts
 +++ b/packages/playwright-core/src/server/localUtils.ts
-@@ -82,10 +82,15 @@ export async function zip(progress: Progress, stackSessions: Map<string, StackSe
+@@ -82,8 +82,13 @@ export async function zip(progress: Progress, stackSessions: Map<string, StackSe
      // New file, just compress the entries.
      await progress.race(fs.promises.mkdir(path.dirname(params.zipFile), { recursive: true }));
      zipFile.end(undefined, () => {
@@ -296,28 +300,40 @@ index 685a0f64f..cea0c1018 100644
 +            promise.resolve();
 +          })
            .on('error', error => promise.reject(error));
--    });
-+      });
+     });
      await progress.race(promise);
-     await deleteStackSession(progress, stackSessions, params.stacksId);
-     return;
-@@ -111,8 +116,10 @@ export async function zip(progress: Progress, stackSessions: Map<string, StackSe
-         zipFile.addReadStream(readStream!, entry.fileName);
-         if (--pendingEntries === 0) {
-           zipFile.end(undefined, () => {
--            zipFile.outputStream.pipe(fs.createWriteStream(params.zipFile)).on('close', () => {
-+            const chunks: Buffer[] = [];
-+            zipFile.outputStream.on('data', data => chunks.push(data)).on('close', () => {
+@@ -106,9 +111,12 @@ export async function zip(progress: Progress, stackSessions: Map<string, StackSe
+ 
+     const finalizeRepack = () => {
+       zipFile.end(undefined, () => {
+-        zipFile.outputStream.pipe(fs.createWriteStream(params.zipFile))
++        const chunks: Buffer[] = [];
++        zipFile.outputStream
++            .on('data', data => chunks.push(data))
+             .on('close', () => {
                fs.promises.unlink(tempFile).then(() => {
 +                fs.writeFileSync(params.zipFile, Buffer.concat(chunks));
                  promise.resolve();
                }).catch(error => promise.reject(error));
-             });
+             })
+diff --git a/packages/playwright-core/src/server/registry/index.ts b/packages/playwright-core/src/server/registry/index.ts
+index 2b6e0141a..7ef2a581c 100644
+--- a/packages/playwright-core/src/server/registry/index.ts
++++ b/packages/playwright-core/src/server/registry/index.ts
+@@ -1568,6 +1568,7 @@ function lowercaseAllKeys(json: any): any {
+   return result;
+ }
+ 
+-export const registry = new Registry(require(path.join(packageRoot, 'browsers.json')));
++// PATCH static require, so the bundler can include browsers.json (Workers cannot read it at runtime)
++export const registry = new Registry(require('../../../browsers.json'));
+ 
+ export { runOopDownloadBrowserMain } from './oopDownloadBrowserMain';
 diff --git a/packages/playwright-core/src/server/screenshotter.ts b/packages/playwright-core/src/server/screenshotter.ts
-index 93765cc33..f8e62d5c1 100644
+index d96c32c5f..d9561092e 100644
 --- a/packages/playwright-core/src/server/screenshotter.ts
 +++ b/packages/playwright-core/src/server/screenshotter.ts
-@@ -254,7 +254,8 @@ export class Screenshotter {
+@@ -252,7 +252,8 @@ export class Screenshotter {
      if (disableAnimations)
        progress.log('  disabled all CSS animations');
      const syncAnimations = this._page.delegate.shouldToggleStyleSheetToSyncAnimations();
@@ -328,25 +344,53 @@ index 93765cc33..f8e62d5c1 100644
        if (!process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY) {
          progress.log('waiting for fonts to load...');
 diff --git a/packages/playwright-core/src/server/trace/recorder/snapshotter.ts b/packages/playwright-core/src/server/trace/recorder/snapshotter.ts
-index 9b5543905..6aa2a56ef 100644
+index 90c2f3432..88181532a 100644
 --- a/packages/playwright-core/src/server/trace/recorder/snapshotter.ts
 +++ b/packages/playwright-core/src/server/trace/recorder/snapshotter.ts
-@@ -91,7 +91,8 @@ export class Snapshotter {
+@@ -94,7 +94,8 @@ export class Snapshotter {
      ];
  
      const { javaScriptEnabled } = this._context._options;
 -    const initScriptSource = `(${frameSnapshotStreamer})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
 +    const initScript = `((__name => (${frameSnapshotStreamer}))(t => t))`;
 +    const initScriptSource = `(${initScript})("${this._snapshotStreamer}", ${javaScriptEnabled || javaScriptEnabled === undefined})`;
-     this._initScript = await this._context.addInitScript(undefined, initScriptSource);
-     await this._context.safeNonStallingEvaluateInAllFrames(initScriptSource, 'main');
+     this._initScript = await this._context.addInitScript(progress, initScriptSource);
+     await progress.race(this._context.safeNonStallingEvaluateInAllFrames(initScriptSource, 'main'));
    }
-diff --git a/packages/playwright-core/src/server/utils/crypto.ts b/packages/playwright-core/src/server/utils/crypto.ts
-index ab51dbb25..2cf1fe999 100644
---- a/packages/playwright-core/src/server/utils/crypto.ts
-+++ b/packages/playwright-core/src/server/utils/crypto.ts
+diff --git a/packages/playwright/src/common/configLoader.ts b/packages/playwright/src/common/configLoader.ts
+index f9ec65451..6ba9d2c91 100644
+--- a/packages/playwright/src/common/configLoader.ts
++++ b/packages/playwright/src/common/configLoader.ts
+@@ -118,7 +118,8 @@ export async function loadConfig(location: ConfigLocation, overrides?: ConfigCLI
+   // 3. Load transform options from the playwright config.
+   const babelPlugins = (userConfig as any)['@playwright/test']?.babelPlugins || [];
+   const external = userConfig.build?.external || [];
+-  const jsxImportSource = path.dirname(require.resolve('playwright'));
++  // PATCH require.resolve is not available in Cloudflare Workers, where the transform is not used
++  const jsxImportSource = typeof require.resolve === 'function' ? path.dirname(require.resolve('playwright')) : undefined;
+   await setTransformConfig({ babelPlugins, external, jsxImportSource });
+   if (!overrides?.tsconfig)
+     await setSingleTSConfig(fullConfig?.singleTSConfigPath);
+diff --git a/packages/playwright/src/package.ts b/packages/playwright/src/package.ts
+index fdd2c47f2..4b2ba3f87 100644
+--- a/packages/playwright/src/package.ts
++++ b/packages/playwright/src/package.ts
+@@ -19,7 +19,8 @@ import path from 'path';
+ // Use a dynamic path so esbuild does not statically resolve and inline
+ // package.json into coreBundle.js.
+ export const packageRoot = path.join(__dirname, '..');
+-export const packageJSON = require(path.join(packageRoot, 'package.json'));
++// PATCH static require, so the bundler can include package.json (Workers cannot read it at runtime)
++export const packageJSON = require('../package.json');
+ 
+ export function libPath(...parts: string[]): string {
+   return path.join(packageRoot, 'lib', ...parts);
+diff --git a/packages/utils/crypto.ts b/packages/utils/crypto.ts
+index c5ed49e8a..ca1c42a8d 100644
+--- a/packages/utils/crypto.ts
++++ b/packages/utils/crypto.ts
 @@ -19,7 +19,13 @@ import crypto from 'crypto';
- import { assert } from '../../utils/isomorphic/assert';
+ import { assert } from '@isomorphic/assert';
  
  export function createGuid(): string {
 -  return crypto.randomBytes(16).toString('hex');
@@ -360,11 +404,11 @@ index ab51dbb25..2cf1fe999 100644
  }
  
  export function calculateSha1(buffer: Buffer | string): string {
-diff --git a/packages/playwright-core/src/server/utils/fileUtils.ts b/packages/playwright-core/src/server/utils/fileUtils.ts
-index 3eab2c036..fab20db31 100644
---- a/packages/playwright-core/src/server/utils/fileUtils.ts
-+++ b/packages/playwright-core/src/server/utils/fileUtils.ts
-@@ -193,9 +193,13 @@ export class SerializedFS {
+diff --git a/packages/utils/serializedFS.ts b/packages/utils/serializedFS.ts
+index 994ebf22e..bec9e2908 100644
+--- a/packages/utils/serializedFS.ts
++++ b/packages/utils/serializedFS.ts
+@@ -165,9 +165,13 @@ export class SerializedFS {
          for (const entry of op.entries)
            zipFile.addFile(entry.value, entry.name);
          zipFile.end();
@@ -380,54 +424,3 @@ index 3eab2c036..fab20db31 100644
              .on('error', error => result.reject(error));
          await result;
          return;
-diff --git a/packages/playwright-core/src/server/utils/nodePlatform.ts b/packages/playwright-core/src/server/utils/nodePlatform.ts
-index 9350b5797..634b126c2 100644
---- a/packages/playwright-core/src/server/utils/nodePlatform.ts
-+++ b/packages/playwright-core/src/server/utils/nodePlatform.ts
-@@ -25,7 +25,7 @@ import { colors } from '../../utilsBundle';
- import { debugLogger } from './debugLogger';
- import { currentZone, emptyZone } from './zones';
- import { debugMode, isUnderTest } from './debug';
--import { zodToJsonSchema as zodToJsonSchemaV3, z } from '../../mcpBundle';
-+// import { zodToJsonSchema as zodToJsonSchemaV3, z } from '../../mcpBundle';
- import type zod3 from 'zod/v3';
- import type zod4 from 'zod';
- 
-@@ -64,7 +64,7 @@ export function setBoxedStackPrefixes(prefixes: string[]) {
-   boxedStackPrefixes = prefixes;
- }
- 
--const coreDir = path.dirname(require.resolve('../../../package.json'));
-+const coreDir = path.dirname('.');
- 
- export const nodePlatform: Platform = {
-   name: 'node',
-@@ -128,9 +128,10 @@ export const nodePlatform: Platform = {
- 
-   zodToJsonSchema: (schema: zod3.Schema | zod4.Schema): any => {
-     // https://zod.dev/library-authors?id=how-to-support-zod-3-and-zod-4-simultaneously
--    if ('_zod' in schema)
--      return z.toJSONSchema(schema);
--    return zodToJsonSchemaV3(schema);
-+    // if ('_zod' in schema)
-+    //   return z.toJSONSchema(schema);
-+    // return zodToJsonSchemaV3(schema);
-+    throw new Error('Not implemented');
-   },
- 
-   zones: {
-diff --git a/packages/playwright/src/util.ts b/packages/playwright/src/util.ts
-index bb15fecee..47c2b9f08 100644
---- a/packages/playwright/src/util.ts
-+++ b/packages/playwright/src/util.ts
-@@ -28,8 +28,8 @@ import type { StackFrame } from '@protocol/channels';
- import type { RawStack } from 'playwright-core/lib/utils';
- import type { TestCase } from './common/test';
- 
--const PLAYWRIGHT_TEST_PATH = path.join(__dirname, '..');
--const PLAYWRIGHT_CORE_PATH = path.dirname(require.resolve('playwright-core/package.json'));
-+const PLAYWRIGHT_TEST_PATH = '.';
-+const PLAYWRIGHT_CORE_PATH = '.';
- 
- export function filterStackTrace(e: Error): { message: string, stack: string, cause?: ReturnType<typeof filterStackTrace> } {
-   const name = e.name ? e.name + ': ' : '';

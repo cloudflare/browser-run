@@ -1,5 +1,3 @@
-import {isUnderTest} from 'playwright-core/lib/utils';
-
 export {mergeTests} from './types/test';
 
 interface Debug {
@@ -9,4 +7,4 @@ interface Debug {
 }
 
 export const debug: Debug;
-export {isUnderTest};
+export function isUnderTest(): boolean;

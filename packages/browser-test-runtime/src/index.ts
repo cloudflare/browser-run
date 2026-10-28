@@ -1,18 +1,15 @@
 import fs from 'fs';
 
-import {
-  asLocatorDescription,
-  currentZone,
-  ManualPromise,
-  renderTitleForCall,
-  setTimeOrigin,
-  timeOrigin,
-} from 'playwright-core/lib/utils';
+import {asLocatorDescription} from '@isomorphic/locatorGenerators';
+import {ManualPromise} from '@isomorphic/manualPromise';
+import {renderTitleForCall} from '@isomorphic/protocolFormatter';
+import {setTimeOrigin, timeOrigin} from '@isomorphic/time';
+import {currentZone} from '@utils/zones';
 import {loadConfig} from 'playwright/lib/common/configLoader';
 import {
   currentTestInfo,
   setCurrentlyLoadingFileSuite,
-} from 'playwright/lib/common/globals';
+} from 'playwright/lib/globals';
 import {bindFileSuiteToProject} from 'playwright/lib/common/suiteUtils';
 import {Suite, TestCase} from 'playwright/lib/common/test';
 import {rootTestType} from 'playwright/lib/common/testType';
@@ -146,7 +143,8 @@ class TestWorker extends WorkerMain {
         configCLIOverrides: {timeout: 5000, ...options},
       },
       artifactsDir: '/tmp/tests',
-      recoverFromStepErrors: false,
+      pauseOnError: false,
+      pauseAtEnd: false,
     });
   }
 
@@ -219,7 +217,11 @@ export class TestRunner {
       const {retry} = this.testContext;
       const [result] = await Promise.all([
         worker.result(),
-        worker.runTestGroup({file, entries: [{testId, retry}]}),
+        // plan annotations are applied by the test runner, which does not run here
+        worker.runTestGroup({
+          file,
+          entries: [{testId, retry, planAnnotations: []}],
+        }),
       ]);
       if (
         result.status === 'failed' &&
