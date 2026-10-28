@@ -18,7 +18,7 @@ const pathMappings = [
 
 // Pre-compile globs to regexes (capture: true creates capture groups for **/*)
 const compiledMappings = pathMappings.map(({ glob, target }) => ({
-  regex: picomatch.makeRe(glob, { capture: true }),
+  regex: picomatch.makeRe(glob, { capture: true, dot: true }),
   target,
 }));
 
