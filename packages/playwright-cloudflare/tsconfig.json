@@ -13,7 +13,10 @@
     "lib": ["esnext", "DOM"],
     "paths": {
       "playwright-core/lib/*": ["../../submodules/playwright/packages/playwright-core/src/*"],
-      "playwright/lib/*": ["../../submodules/playwright/packages/playwright/src/*"]
+      "playwright/lib/*": ["../../submodules/playwright/packages/playwright/src/*"],
+      "@isomorphic/*": ["../../submodules/playwright/packages/isomorphic/*"],
+      "@utils/*": ["../../submodules/playwright/packages/utils/*"],
+      "@protocol/*": ["../../submodules/playwright/packages/protocol/src/*"]
     },
     "baseUrl": ".",
     "types": ["@cloudflare/workers-types"]

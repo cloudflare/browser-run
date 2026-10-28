@@ -20,12 +20,8 @@
   "scripts": {
     "ci:playwright": "cd ../../submodules/playwright && npm ci --ignore-scripts",
     "generate-injected:core": "cd ../../submodules/playwright && node ./utils/generate_injected.js",
-    "ci:core:bundles:utils": "cd ../../submodules/playwright/packages/playwright-core/bundles/utils && npm ci",
-    "ci:core:bundles:zip": "cd ../../submodules/playwright/packages/playwright-core/bundles/zip && npm ci",
-    "ci:core:bundles:mcp": "cd ../../submodules/playwright/packages/playwright-core/bundles/mcp && npm ci",
-    "ci:test:bundles:expect": "cd ../../submodules/playwright/packages/playwright/bundles/expect && npm ci",
     "ci:bundles:pngjs": "cd bundles/pngjs && npm ci",
-    "ci:bundles": "npm run ci:core:bundles:utils && npm run ci:core:bundles:zip && npm run ci:core:bundles:mcp && npm run ci:test:bundles:expect && npm run ci:bundles:pngjs",
+    "ci:bundles": "npm run ci:bundles:pngjs",
     "build:bundles": "node utils/build_bundles.js",
     "build": "node ../../scripts/with-patch.mjs playwright npm run build:patched",
     "build:patched": "npm run ci:playwright && npm run generate-injected:core && npm run ci:bundles && npm run build:bundles && vite build"
