@@ -9,7 +9,8 @@ import {CdpBrowser} from 'puppeteer-core/lib/cdp/Browser.js';
 import {Connection} from 'puppeteer-core/lib/cdp/Connection.js';
 import type {ConnectionTransport} from 'puppeteer-core/lib/common/ConnectionTransport.js';
 import type {ConnectOptions} from 'puppeteer-core/lib/common/ConnectOptions.js';
-import {debugError} from 'puppeteer-core/lib/common/util.js';
+import {DEBUG_PREFIXES, debug} from 'puppeteer-core/lib/common/Debug.js';
+import {createIncrementalIdGenerator} from 'puppeteer-core/lib/util/incremental-id-generator.js';
 /**
  * Users should never call this directly; it's called when calling
  * `puppeteer.connect` with `protocol: 'cdp'`.
@@ -23,6 +24,7 @@ export async function connectToCDPBrowser(
   const {
     acceptInsecureCerts = false,
     networkEnabled = true,
+    issuesEnabled = true,
     defaultViewport = DEFAULT_VIEWPORT,
     downloadBehavior,
     targetFilter,
@@ -30,6 +32,10 @@ export async function connectToCDPBrowser(
     slowMo = 0,
     protocolTimeout,
     handleDevToolsAsPage,
+    idGenerator = createIncrementalIdGenerator(),
+    blocklist,
+    allowlist,
+    logger = debug,
     sessionId = 'unknown',
   } = options;
 
@@ -37,7 +43,10 @@ export async function connectToCDPBrowser(
     '',
     connectionTransport,
     slowMo,
-    protocolTimeout
+    protocolTimeout,
+    /* rawErrors */ false,
+    idGenerator,
+    logger
   );
 
   const {browserContextIds} = await connection.send(
@@ -51,13 +60,19 @@ export async function connectToCDPBrowser(
     downloadBehavior,
     undefined,
     () => {
-      return connection.send('Browser.close').catch(debugError);
+      return connection.send('Browser.close').catch(error => {
+        logger?.(DEBUG_PREFIXES.error)?.(error);
+      });
     },
     targetFilter,
     isPageTarget,
     undefined,
     networkEnabled,
+    issuesEnabled,
     handleDevToolsAsPage,
+    blocklist,
+    allowlist,
+    logger,
     sessionId
   );
   return browser;

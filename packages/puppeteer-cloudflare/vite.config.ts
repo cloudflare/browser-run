@@ -11,14 +11,14 @@ const baseDir = __dirname.replace(/\\/g, '/');
 // Use **/ prefix to match anywhere in absolute paths
 const pathMappings = [
   { glob: '**/packages/puppeteer-cloudflare/src/**', target: 'puppeteer-cloudflare' },
-  { glob: '**/submodules/puppeteer/packages/puppeteer-core/lib/esm/puppeteer/**', target: 'puppeteer-core' },
-  { glob: '**/submodules/puppeteer/packages/puppeteer-core/lib/esm/third_party/**', target: 'puppeteer-core/third_party' },
+  { glob: '**/submodules/puppeteer/packages/puppeteer-core/lib/puppeteer/**', target: 'puppeteer-core' },
+  { glob: '**/submodules/puppeteer/packages/puppeteer-core/lib/third_party/**', target: 'puppeteer-core/third_party' },
   { glob: '**/submodules/puppeteer/packages/puppeteer-core/node_modules/**', target: 'puppeteer-core/node_modules' },
 ];
 
 // Pre-compile globs to regexes (capture: true creates capture groups for **/*)
 const compiledMappings = pathMappings.map(({ glob, target }) => ({
-  regex: picomatch.makeRe(glob, { capture: true }),
+  regex: picomatch.makeRe(glob, { capture: true, dot: true }),
   target,
 }));
 
@@ -91,15 +91,15 @@ export default defineConfig({
       // The TypeScript is pre-compiled with `tsc` to handle decorators correctly
       {
         find: /^puppeteer-core\/lib\/esm\/puppeteer\/(.+)\.js$/,
-        replacement: path.resolve(baseDir, '../../submodules/puppeteer/packages/puppeteer-core/lib/esm/puppeteer/$1.js'),
+        replacement: path.resolve(baseDir, '../../submodules/puppeteer/packages/puppeteer-core/lib/puppeteer/$1.js'),
       },
       {
         find: /^puppeteer-core\/lib\/(.+)\.js$/,
-        replacement: path.resolve(baseDir, '../../submodules/puppeteer/packages/puppeteer-core/lib/esm/puppeteer/$1.js'),
+        replacement: path.resolve(baseDir, '../../submodules/puppeteer/packages/puppeteer-core/lib/puppeteer/$1.js'),
       },
       {
         find: /^puppeteer-core\/lib\//,
-        replacement: path.resolve(baseDir, '../../submodules/puppeteer/packages/puppeteer-core/lib/esm/puppeteer/'),
+        replacement: path.resolve(baseDir, '../../submodules/puppeteer/packages/puppeteer-core/lib/puppeteer/'),
       },
     ],
   },
@@ -143,7 +143,6 @@ export default defineConfig({
         'node:url',
         'node:util',
         'node:zlib',
-        'debug',
         'cloudflare:workers',
         /^chromium-bidi\/.*/,
         /^devtools-protocol\/.*/,

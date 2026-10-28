@@ -1,11 +1,11 @@
 diff --git a/packages/puppeteer-core/src/api/Browser.ts b/packages/puppeteer-core/src/api/Browser.ts
-index 6a441ee0789..48cd7c1bd79 100644
+index 712e1eeda53..99e7002dbdd 100644
 --- a/packages/puppeteer-core/src/api/Browser.ts
 +++ b/packages/puppeteer-core/src/api/Browser.ts
-@@ -727,4 +727,13 @@ export abstract class Browser extends EventEmitter<BrowserEvents> {
+@@ -903,4 +903,13 @@ export abstract class Browser extends EventEmitter<BrowserEvents> {
     * @internal
     */
-   abstract isNetworkEnabled(): boolean;
+   abstract isIssuesEnabled(): boolean;
 +
 +  /**
 +   * Browser Run session ID.
@@ -17,53 +17,53 @@ index 6a441ee0789..48cd7c1bd79 100644
 +  }
  }
 diff --git a/packages/puppeteer-core/src/cdp/Browser.ts b/packages/puppeteer-core/src/cdp/Browser.ts
-index 6d5c2fccde1..648968363ee 100644
+index 094caa838cb..19d5a867724 100644
 --- a/packages/puppeteer-core/src/cdp/Browser.ts
 +++ b/packages/puppeteer-core/src/cdp/Browser.ts
-@@ -68,6 +68,7 @@ export class CdpBrowser extends BrowserBase {
-     waitForInitiallyDiscoveredTargets = true,
-     networkEnabled = true,
-     handleDevToolsAsPage = false,
+@@ -87,6 +87,7 @@ export class CdpBrowser extends BrowserBase {
+     blocklist: string[] | undefined = undefined,
+     allowlist: string[] | undefined = undefined,
+     logger: Logger,
 +    sessionId?: string,
    ): Promise<CdpBrowser> {
      const browser = new CdpBrowser(
        connection,
-@@ -80,6 +81,7 @@ export class CdpBrowser extends BrowserBase {
-       waitForInitiallyDiscoveredTargets,
-       networkEnabled,
-       handleDevToolsAsPage,
+@@ -103,6 +104,7 @@ export class CdpBrowser extends BrowserBase {
+       blocklist,
+       allowlist,
+       logger,
 +      sessionId,
      );
-     if (acceptInsecureCerts) {
-       await connection.send('Security.setIgnoreCertificateErrors', {
-@@ -100,6 +102,8 @@ export class CdpBrowser extends BrowserBase {
-   #networkEnabled = true;
-   #targetManager: TargetManager;
-   #handleDevToolsAsPage = false;
+ 
+     if (allowlist) {
+@@ -139,6 +141,8 @@ export class CdpBrowser extends BrowserBase {
+   #version?: Deferred<Protocol.Browser.GetVersionResponse>;
+   #hasNetworkRestrictions = false;
+   #subscriptions = new DisposableStack();
 +  // Keep the remote Browser Run session available for diagnostics.
 +  #sessionId: string;
  
    constructor(
      connection: Connection,
-@@ -112,6 +116,7 @@ export class CdpBrowser extends BrowserBase {
-     waitForInitiallyDiscoveredTargets = true,
-     networkEnabled = true,
-     handleDevToolsAsPage = false,
+@@ -155,6 +159,7 @@ export class CdpBrowser extends BrowserBase {
+     blocklist: string[] | undefined = undefined,
+     allowlist: string[] | undefined = undefined,
+     logger: Logger,
 +    sessionId?: string,
    ) {
-     super();
+     super(logger);
      this.#networkEnabled = networkEnabled;
-@@ -139,6 +144,7 @@ export class CdpBrowser extends BrowserBase {
-         new CdpBrowserContext(this.#connection, this, contextId),
+@@ -197,6 +202,7 @@ export class CdpBrowser extends BrowserBase {
+         new CdpBrowserContext(this.#connection, this, contextId, logger),
        );
      }
 +    this.#sessionId = sessionId || 'unknown';
    }
  
    #emitDisconnected = () => {
-@@ -545,4 +551,12 @@ export class CdpBrowser extends BrowserBase {
-   override isNetworkEnabled(): boolean {
-     return this.#networkEnabled;
+@@ -767,4 +773,12 @@ export class CdpBrowser extends BrowserBase {
+   override isIssuesEnabled(): boolean {
+     return this.#issuesEnabled;
    }
 +
 +  /**
@@ -74,11 +74,26 @@ index 6d5c2fccde1..648968363ee 100644
 +    return this.#sessionId;
 +  }
  }
+diff --git a/packages/puppeteer-core/src/cdp/Frame.ts b/packages/puppeteer-core/src/cdp/Frame.ts
+index 6835dbd8253..0835458e8cf 100644
+--- a/packages/puppeteer-core/src/cdp/Frame.ts
++++ b/packages/puppeteer-core/src/cdp/Frame.ts
+@@ -13,9 +13,9 @@ import type {SetContentWaitForOptions, WaitForOptions} from '../api/Frame.js';
+ import {Frame, FrameEvent, throwIfDetached} from '../api/Frame.js';
+ import type {HTTPResponse} from '../api/HTTPResponse.js';
+ import type {WaitTimeoutOptions} from '../api/Page.js';
++import type {Realm} from '../api/Realm.js';
+ import {DEBUG_PREFIXES, type Logger} from '../common/Debug.js';
+ import {UnsupportedOperation} from '../common/Errors.js';
+-import type {Realm} from '../puppeteer-core.js';
+ import {Deferred} from '../util/Deferred.js';
+ import {disposeSymbol} from '../util/disposable.js';
+ import {isErrorLike} from '../util/ErrorLike.js';
 diff --git a/packages/puppeteer-core/src/cdp/Page.ts b/packages/puppeteer-core/src/cdp/Page.ts
-index fed1282dddf..a6eef18ed05 100644
+index 3a881be5fc2..648c40f87ee 100644
 --- a/packages/puppeteer-core/src/cdp/Page.ts
 +++ b/packages/puppeteer-core/src/cdp/Page.ts
-@@ -698,16 +698,36 @@ export class CdpPage extends Page {
+@@ -742,16 +742,36 @@ export class CdpPage extends Page {
        if (!cookie.url && pageURL.startsWith('http')) {
          item.url = pageURL;
        }
@@ -123,23 +138,24 @@ index fed1282dddf..a6eef18ed05 100644
        }
      }
 diff --git a/packages/puppeteer-core/src/common/BrowserConnector.ts b/packages/puppeteer-core/src/common/BrowserConnector.ts
-index bc7880ae451..86e22a0cc03 100644
+index 0836243b8eb..f78bb01b4a4 100644
 --- a/packages/puppeteer-core/src/common/BrowserConnector.ts
 +++ b/packages/puppeteer-core/src/common/BrowserConnector.ts
-@@ -5,22 +5,14 @@
-  */
+@@ -6,23 +6,15 @@
  
+ import {URLPattern} from '../../third_party/urlpattern-polyfill/urlpattern-polyfill.js';
  import type {Browser} from '../api/Browser.js';
 -import {_connectToBiDiBrowser} from '../bidi/BrowserConnector.js';
  import {_connectToCdpBrowser} from '../cdp/BrowserConnector.js';
 -import {environment, isNode} from '../environment.js';
  import {assert} from '../util/assert.js';
  import {isErrorLike} from '../util/ErrorLike.js';
-
+ 
 +import {BrowserWebSocketTransport} from './BrowserWebSocketTransport.js';
  import type {ConnectionTransport} from './ConnectionTransport.js';
  import type {ConnectOptions} from './ConnectOptions.js';
-
+ import type {Logger} from './Debug.js';
+ 
 -const getWebSocketTransportClass = async () => {
 -  return isNode
 -    ? (await import('../node/NodeWebSocketTransport.js')).NodeWebSocketTransport
@@ -150,7 +166,7 @@ index bc7880ae451..86e22a0cc03 100644
  /**
   * Users should never call this directly; it's called when calling
   * `puppeteer.connect`. This method attaches Puppeteer to an existing browser instance.
-@@ -33,21 +25,13 @@ export async function _connectToBrowser(
+@@ -67,23 +59,14 @@ export async function _connectToBrowser(
    const {connectionTransport, endpointUrl} =
      await getConnectionTransport(options);
  
@@ -159,6 +175,7 @@ index bc7880ae451..86e22a0cc03 100644
 -      connectionTransport,
 -      endpointUrl,
 -      options,
+-      options.logger,
 -    );
 -    return bidiBrowser;
 -  } else {
@@ -166,6 +183,7 @@ index bc7880ae451..86e22a0cc03 100644
 -      connectionTransport,
 -      endpointUrl,
 -      options,
+-      options.logger,
 -    );
 -    return cdpBrowser;
 -  }
@@ -174,24 +192,22 @@ index bc7880ae451..86e22a0cc03 100644
 +    connectionTransport,
 +    endpointUrl,
 +    options,
++    options.logger,
 +  );
 +  return cdpBrowser;
  }
  
  /**
-@@ -57,96 +41,35 @@ export async function _connectToBrowser(
+@@ -94,7 +77,7 @@ export async function _connectToBrowser(
  async function getConnectionTransport(
-   options: ConnectOptions,
+   options: ConnectOptions & {logger: Logger},
  ): Promise<{connectionTransport: ConnectionTransport; endpointUrl: string}> {
--  const {
--    browserWSEndpoint,
--    browserURL,
--    channel,
--    transport,
--    headers = {},
--  } = options;
+-  const {browserWSEndpoint, browserURL, channel, transport} = options;
 +  const {browserWSEndpoint, browserURL, transport} = options;
-
+   // `wsOptions.headers` supersedes the deprecated top-level `headers`.
+   const headers = options.wsOptions?.headers ?? options.headers ?? {};
+   const wsOptions = options.wsOptions ?? {};
+@@ -102,18 +85,17 @@ async function getConnectionTransport(
    assert(
      Number(!!browserWSEndpoint) +
        Number(!!browserURL) +
@@ -202,27 +218,31 @@ index bc7880ae451..86e22a0cc03 100644
 -    'Exactly one of browserWSEndpoint, browserURL, transport or channel must be passed to puppeteer.connect',
 +    'Exactly one of browserWSEndpoint, browserURL or transport must be passed to puppeteer.connect',
    );
-
+ 
    if (transport) {
      return {connectionTransport: transport, endpointUrl: ''};
    } else if (browserWSEndpoint) {
 -    const WebSocketClass = await getWebSocketTransportClass();
 +    // BrowserWebSocketTransport uses the WebSocket API available in Workers.
      const connectionTransport: ConnectionTransport =
--      await WebSocketClass.create(browserWSEndpoint, headers);
-+      await BrowserWebSocketTransport.create(browserWSEndpoint);
-     return {
-       connectionTransport: connectionTransport,
-       endpointUrl: browserWSEndpoint,
+-      await WebSocketClass.create(
++      await BrowserWebSocketTransport.create(
+         browserWSEndpoint,
+         headers,
+         options.logger,
+@@ -125,9 +107,9 @@ async function getConnectionTransport(
      };
    } else if (browserURL) {
-     const connectionURL = await getWSEndpoint(browserURL);
+     const connectionURL = await getWSEndpoint(browserURL, headers);
 -    const WebSocketClass = await getWebSocketTransportClass();
 +    // Use the same Workers-compatible transport for discovered endpoints.
      const connectionTransport: ConnectionTransport =
--      await WebSocketClass.create(connectionURL);
-+      await BrowserWebSocketTransport.create(connectionURL);
-     return {
+-      await WebSocketClass.create(
++      await BrowserWebSocketTransport.create(
+         connectionURL,
+         headers,
+         options.logger,
+@@ -137,59 +119,6 @@ async function getConnectionTransport(
        connectionTransport: connectionTransport,
        endpointUrl: connectionURL,
      };
@@ -243,10 +263,7 @@ index bc7880ae451..86e22a0cc03 100644
 -    );
 -    const portPath = join(userDataDir, 'DevToolsActivePort');
 -    try {
--      const fileContent = await environment.value.fs.promises.readFile(
--        portPath,
--        'ascii',
--      );
+-      const fileContent = await environment.value.readFile(portPath, 'ascii');
 -      const [rawPort, rawPath] = fileContent
 -        .split('\n')
 -        .map(line => {
@@ -267,6 +284,8 @@ index bc7880ae451..86e22a0cc03 100644
 -      const connectionTransport = await WebSocketClass.create(
 -        browserWSEndpoint,
 -        headers,
+-        options.logger,
+-        wsOptions,
 -      );
 -      return {
 -        connectionTransport: connectionTransport,
@@ -284,13 +303,13 @@ index bc7880ae451..86e22a0cc03 100644
    throw new Error('Invalid connection options');
  }
 diff --git a/packages/puppeteer-core/src/common/util.ts b/packages/puppeteer-core/src/common/util.ts
-index 61ea5871dfe..d8f36286d12 100644
+index 1ddc8f540fd..34de0ed2948 100644
 --- a/packages/puppeteer-core/src/common/util.ts
 +++ b/packages/puppeteer-core/src/common/util.ts
-@@ -188,7 +188,13 @@ export function evaluationString(
+@@ -183,7 +183,13 @@ export function evaluationString(
      return JSON.stringify(arg);
    }
-
+ 
 -  return `(${fun})(${args.map(serializeArgument).join(',')})`;
 +  // function is most likely bundled with wrangler,
 +  // which uses esbuild with keepNames enabled.
@@ -302,7 +321,7 @@ index 61ea5871dfe..d8f36286d12 100644
  }
  
  /**
-@@ -200,7 +206,24 @@ export async function getReadableAsTypedArray(
+@@ -196,7 +202,21 @@ export async function getReadableAsTypedArray(
  ): Promise<Uint8Array | null> {
    const buffers: Uint8Array[] = [];
    const reader = readable.getReader();
@@ -311,28 +330,25 @@ index 61ea5871dfe..d8f36286d12 100644
 +    path &&
 +    globalThis.navigator?.userAgent === 'Cloudflare-Workers'
 +  ) {
-+    // Workers file handles do not preserve repeated writeFile append behavior.
-+    await environment.value.fs.promises.writeFile(path, new Uint8Array());
++    // Workers file handles do not preserve repeated writeFile append behavior,
++    // so write the full content once.
 +    while (true) {
 +      const {done, value} = await reader.read();
 +      if (done) {
 +        break;
 +      }
-+      await environment.value.fs.promises.appendFile(path, value);
++      buffers.push(value);
 +    }
-+    const file = await environment.value.fs.promises.readFile(path);
-+    return file.length === 0
-+      ? null
-+      : new Uint8Array(file.buffer, file.byteOffset, file.byteLength);
++    await environment.value.writeFile(path, mergeUint8Arrays(buffers));
 +  } else if (path) {
-     const fileHandle = await environment.value.fs.promises.open(path, 'w+');
+     const fileHandle = await environment.value.openFileForWriting(path);
      try {
        while (true) {
 diff --git a/packages/puppeteer-core/src/util/Function.ts b/packages/puppeteer-core/src/util/Function.ts
 index ae0f161c6d9..f0d5ae5f40c 100644
 --- a/packages/puppeteer-core/src/util/Function.ts
 +++ b/packages/puppeteer-core/src/util/Function.ts
-@@ -29,27 +29,29 @@ export const createFunction = (
+@@ -29,29 +29,31 @@ export const createFunction = (
   */
  export function stringifyFunction(fn: (...args: never) => unknown): string {
    let value = fn.toString();
@@ -377,3 +393,5 @@ index ae0f161c6d9..f0d5ae5f40c 100644
 +    ? `((__name => (${value}))(t => t))`
 +    : value;
  }
+ 
+ /**
