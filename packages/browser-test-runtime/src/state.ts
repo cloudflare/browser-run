@@ -11,6 +11,8 @@ export const playwrightTestConfig = {
       testDir: '/bundle',
     },
   ],
+  // same as submodules/playwright/tests/library/playwright.config.ts
+  expect: {timeout: 10000},
 };
 
 export const configLocation = {
