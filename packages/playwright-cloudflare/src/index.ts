@@ -1,7 +1,7 @@
-import { createInProcessPlaywright } from 'playwright-core/lib/inProcessFactory';
+import { playwright } from 'playwright-core/lib/inprocess';
 import { kBrowserCloseMessageId } from 'playwright-core/lib/server/chromium/crConnection';
 import { env } from 'cloudflare:workers';
-import { setTimeOrigin, timeOrigin } from 'playwright-core/lib/utils/isomorphic/time';
+import { setTimeOrigin, timeOrigin } from '@isomorphic/time';
 
 import { transportZone, WebSocketTransport } from './cloudflare/webSocketTransport';
 import { wrapClientApis } from './cloudflare/wrapClientApis';
@@ -22,7 +22,6 @@ function resetMonotonicTime() {
     setTimeOrigin(Date.now());
 }
 
-const playwright = createInProcessPlaywright();
 unsupportedOperations(playwright);
 wrapClientApis();
 
@@ -34,7 +33,7 @@ const WS_FAKE_HOST = 'ws://fake.host';
 // Browser Run binding every property is an RPC stub, so it is always a function.
 const rpcBindings = new WeakSet<object>();
 
-const originalConnectOverCDP = playwright.chromium.connectOverCDP;
+const originalConnectOverCDP = playwright.chromium.connectOverCDP as (endpointURL: string, options?: ConnectOverCDPOptions) => Promise<unknown>;
 // HACK this is a major hack, but we need it to make playwright-mcp and stagehand work without modifying their code extensively.
 // Both playwright-mcp and stagehand use playwright.chromium.connectOverCDP if a CDP endpoint is passed,
 // so we need to override it to use our own connectOverCDP implementation.

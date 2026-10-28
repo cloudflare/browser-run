@@ -1,4 +1,4 @@
-import {currentlyLoadingFileSuite} from 'playwright/lib/common/globals';
+import {currentlyLoadingFileSuite} from 'playwright/lib/globals';
 
 import {configLocation, playwrightTestConfig} from '../state';
 
