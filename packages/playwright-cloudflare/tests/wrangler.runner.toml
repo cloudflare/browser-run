@@ -1,0 +1,20 @@
+# Runs upstream Playwright Test in Worker Loader isolates (src/runner/index.ts).
+# Build runner/dist first: node runner/build.mjs
+name = "playwright-test-runner"
+main = "src/runner/index.ts"
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-04-04"
+
+[browser]
+binding = "BROWSER"
+
+[[worker_loaders]]
+binding = "LOADER"
+
+[assets]
+directory = "../../../submodules/playwright/tests/assets"
+binding = "ASSETS"
+run_worker_first = true
+
+[observability]
+enabled = true
