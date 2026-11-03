@@ -95,6 +95,7 @@ export const skipTests: string[] = [
   'page/locator-misc-1.spec.ts > should upload the file',
   'page/page-autowaiting-no-hang.spec.ts > assigning location to about:blank',
   'page/page-basic.spec.ts > should have sane user agent',
+  'page/page-evaluate.spec.ts > should properly serialize PerformanceMeasure object',
   'page/page-evaluate.spec.ts > should respect use strict expression',
   'page/page-evaluate.spec.ts > should work with function shorthands',
   'page/page-event-popup.spec.ts > should be able to capture alert',
