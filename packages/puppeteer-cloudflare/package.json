@@ -1,7 +1,7 @@
 {
   "name": "@cloudflare/puppeteer",
   "description": "Puppeteer for Cloudflare Workers",
-  "version": "1.5.0-rc.0",
+  "version": "2.0.0-next",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
