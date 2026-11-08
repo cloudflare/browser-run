@@ -3,7 +3,15 @@
 // project under /project/smoke.
 import { defineConfig } from 'playwright/test';
 
+// Upstream's own template, so the specs find their *-chromium snapshots;
+// build.mjs collects the snapshots with the same one.
+import snapshots from './snapshots.json';
+
 export default defineConfig({
+  snapshotPathTemplate: snapshots.snapshotPathTemplate,
+  // Specs write under their output paths with the isolate's own fs, which can
+  // only write in /tmp.
+  outputDir: '/tmp/test-results',
   workers: 6,
   retries: 1,
   timeout: 60 * 1000,

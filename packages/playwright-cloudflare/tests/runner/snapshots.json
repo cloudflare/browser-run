@@ -1,0 +1,3 @@
+{
+  "snapshotPathTemplate": "{testDir}/{testFileDir}/{testFileName}-snapshots/{arg}-chromium{ext}"
+}

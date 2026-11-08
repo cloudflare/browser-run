@@ -30,6 +30,10 @@ interface RunRequest {
 }
 
 const PROJECT_ROOT = '/project';
+
+// Snapshots and assets, base64 in project.json.
+const FILES = Object.fromEntries(Object.entries((PROJECT as { files: Record<string, string> }).files).map(([key, base64]) =>
+  [key, Uint8Array.from(atob(base64), char => char.charCodeAt(0)).buffer]));
 const LOADED_COMPATIBILITY_DATE = '2026-04-04';
 const RUN_TIMEOUT_MS = 20 * 60 * 1000;
 
@@ -54,7 +58,7 @@ function run(env: RunnerEnv, origin: string, { args = [], binding = 'BROWSER' }:
     payloads: { runner: RUNNER_PAYLOAD, worker: WORKER_PAYLOAD },
     phase: 'run',
     tree,
-    bundle: PROJECT as ProjectBundle,
+    bundle: { ...(PROJECT as ProjectBundle), files: FILES },
     files: {
       async readFile(file) {
         const node = tree.nodes[file];

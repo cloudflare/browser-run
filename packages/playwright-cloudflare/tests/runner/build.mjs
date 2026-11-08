@@ -5,7 +5,9 @@
 //   @cloudflare/kitebuild-playwright-spec-runner from the installed `playwright`
 //   and @cloudflare/playwright (the client under test).
 // - project.json: the config and specs bundled with the aliases of
-//   ../vite.config.ts, one entry module per file, and their source maps.
+//   ../vite.config.ts, one entry module per file, and their source maps; and,
+//   base64-encoded, the specs' snapshots and the assets they name in
+//   asset('...'), which reads /bundle/assets/<name>.
 // - tree.json: the virtual project the runner walks: /project/playwright.config.ts,
 //   /project/tests/<spec> and /project/smoke/<spec>.
 //
@@ -15,8 +17,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildRunnerPayload, buildWorkerPayload } from '@cloudflare/kitebuild-playwright-spec-runner/build';
+import { buildRunnerPayload, buildWorkerPayload, collectProjectFiles } from '@cloudflare/kitebuild-playwright-spec-runner/build';
 import { build, loadConfigFromFile } from 'vite';
+
+import snapshots from './snapshots.json' with { type: 'json' };
 
 const PROJECT_ROOT = '/project';
 const PILOT_SPECS = ['page/page-basic.spec.ts', 'browser-rendering/user-agent.spec.ts'];
@@ -107,9 +111,30 @@ for (const key of fs.readdirSync(modulesDir).filter(name => name.endsWith('.js')
   delete map.sourcesContent;
   project.maps[key] = JSON.stringify(map);
 }
+const specs = [...virtualPaths].filter(([, file]) => file.startsWith(`${PROJECT_ROOT}/tests/`));
+// Every string in a spec naming something under assets/: names also reach
+// asset() through variables, such as a list of files to upload.
+const assetNames = new Set(specs.flatMap(([real]) =>
+  [...fs.readFileSync(real, 'utf8').matchAll(/'([^'\n]+)'/g)].map(match => match[1])
+      .filter(name => !name.startsWith('/') && !name.includes('..') && fs.existsSync(path.join(upstreamTestsDir, 'assets', name)))));
+const binary = collectProjectFiles({
+  snapshots: {
+    snapshotPathTemplate: snapshots.snapshotPathTemplate,
+    testDir: `${PROJECT_ROOT}/tests`,
+    testFiles: specs.map(([, file]) => file),
+    // A spec directory is browser-run's own (src/) or upstream's.
+    resolve: dir => {
+      const relative = path.posix.relative(`${PROJECT_ROOT}/tests`, dir);
+      return [cloudflareTestsDir, upstreamTestsDir].map(root => path.join(root, relative)).find(fs.existsSync);
+    },
+  },
+  // A name may be a directory, such as axe-core/implicit-role.
+  assets: [{ dir: upstreamTestsDir, include: [...assetNames].flatMap(name => [`assets/${name}`, `assets/${name}/**`]) }],
+});
+project.files = Object.fromEntries(Object.entries(binary.files).map(([key, bytes]) => [key, Buffer.from(bytes).toString('base64')]));
 fs.writeFileSync(path.join(outDir, 'project.json'), JSON.stringify(project));
 
-const tree = { roots: [PROJECT_ROOT], nodes: { [PROJECT_ROOT]: { type: 'dir' } } };
+const tree = { roots: [PROJECT_ROOT], nodes: { [PROJECT_ROOT]: { type: 'dir' }, ...binary.nodes } };
 for (const [real, file] of virtualPaths) {
   for (let dir = path.posix.dirname(file); dir !== PROJECT_ROOT; dir = path.posix.dirname(dir))
     tree.nodes[dir] = { type: 'dir' };
@@ -118,4 +143,5 @@ for (const [real, file] of virtualPaths) {
 }
 fs.writeFileSync(path.join(outDir, 'tree.json'), JSON.stringify(tree));
 
-console.log(`runner/dist: playwright ${runner.playwrightVersion}, ${Object.keys(project.entries).length} entries, ${Object.keys(project.modules).length} modules`);
+const fileBytes = Object.values(binary.files).reduce((total, bytes) => total + bytes.byteLength, 0);
+console.log(`runner/dist: playwright ${runner.playwrightVersion}, ${Object.keys(project.entries).length} entries, ${Object.keys(project.modules).length} modules, ${Object.keys(binary.files).length} files (${(fileBytes / 1024).toFixed(0)} KiB)`);
