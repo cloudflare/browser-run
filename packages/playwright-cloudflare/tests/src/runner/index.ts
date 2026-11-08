@@ -11,6 +11,7 @@ import RUNNER_PAYLOAD from '../../runner/dist/runner-payload.txt';
 import WORKER_PAYLOAD from '../../runner/dist/worker-payload.txt';
 import PROJECT from '../../runner/dist/project.json';
 import TREE from '../../runner/dist/tree.json';
+import BUILD from '../../runner/dist/build.json';
 import { serveAsset } from '../server/assets';
 
 import type { BrowserBindingName } from '../utils';
@@ -88,13 +89,15 @@ function run(env: RunnerEnv, origin: string, { args = [], binding = 'BROWSER' }:
 }
 
 interface WorkerStart {
+  build: string;
   env: Record<string, string>;
   binding?: BrowserBindingName;
 }
 
 // One worker process for upstream's runner in Node (runner/node-run.mjs). The
-// socket's first frame is {env, binding}, then {message} for each IPC message;
-// the isolate answers with {message}, {stdio, text} and finally {exit}.
+// socket's first frame is {build, env, binding}, then {message} for each IPC
+// message; the isolate answers with {message}, {stdio, text} and finally {exit}.
+// A runner listing tests from another build would send IDs this one lacks.
 async function worker(env: RunnerEnv, origin: string, socket: WebSocket): Promise<void> {
   const inbox: unknown[] = [];
   let waiter: ((items: unknown[] | null) => void) | undefined;
@@ -131,7 +134,9 @@ async function worker(env: RunnerEnv, origin: string, socket: WebSocket): Promis
 
   let code = 1;
   try {
-    const { env: processEnv, binding = 'BROWSER' } = await started;
+    const { build, env: processEnv, binding = 'BROWSER' } = await started;
+    if (build !== BUILD.id)
+      throw new Error(`this Worker was deployed from build ${BUILD.id}, but the runner's tests are from build ${build}; deploy runner/dist again`);
     code = await runPlaywrightWorker(project(env, origin, binding), processEnv, {
       take: () => new Promise(resolve => {
         waiter = resolve;
@@ -149,6 +154,8 @@ async function worker(env: RunnerEnv, origin: string, socket: WebSocket): Promis
 export default {
   async fetch(request: Request, env: RunnerEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname === '/build')
+      return Response.json(BUILD);
     if (url.pathname === '/worker') {
       // WebSocket clients cannot set headers, so the token is a parameter.
       if (!env.RUN_TOKEN || url.searchParams.get('token') !== env.RUN_TOKEN)

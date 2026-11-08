@@ -10,9 +10,12 @@
 //   asset('...'), which reads /bundle/assets/<name>.
 // - tree.json: the virtual project the runner walks: /project/playwright.config.ts,
 //   /project/tests/<spec> and /project/smoke/<spec>.
+// - build.json: an ID for the above, which the Worker reports at /build.
+// - node/project: the config and specs again, for upstream's runner in Node.
 //
 // Usage: node runner/build.mjs [spec ...], with specs named as in skipTests.ts
 // (page/page-basic.spec.ts, browser-rendering/user-agent.spec.ts).
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -185,6 +188,13 @@ for (const [real, file] of virtualPaths) {
   tree.nodes[file] = { type: 'file', size: Buffer.byteLength(text), mtimeMs: 0, text };
 }
 fs.writeFileSync(path.join(outDir, 'tree.json'), JSON.stringify(tree));
+
+// What the Worker deploys from this build; node-run.mjs refuses a Worker
+// deployed from another, whose test IDs need not match the Node copy's.
+const buildId = createHash('sha256');
+for (const name of ['worker-payload.txt', 'project.json', 'tree.json'])
+  buildId.update(fs.readFileSync(path.join(outDir, name)));
+fs.writeFileSync(path.join(outDir, 'build.json'), JSON.stringify({ id: buildId.digest('hex').slice(0, 16) }));
 
 const fileBytes = Object.values(binary.files).reduce((total, bytes) => total + bytes.byteLength, 0);
 console.log(`runner/dist: playwright ${runner.playwrightVersion}, ${Object.keys(project.entries).length} entries, ${Object.keys(project.modules).length} modules, ${Object.keys(binary.files).length} files (${(fileBytes / 1024).toFixed(0)} KiB)`);

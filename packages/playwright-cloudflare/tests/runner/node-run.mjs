@@ -21,6 +21,15 @@ const PROJECT_ROOT = '/project';
 const { WORKER_URL, RUN_TOKEN } = process.env;
 if (!WORKER_URL || !RUN_TOKEN)
   throw new Error('node-run: set WORKER_URL and RUN_TOKEN');
+// The Worker must be deployed from this build: Node lists the tests from its
+// copy, and the isolates run them by ID from theirs.
+const { id: build } = JSON.parse(fs.readFileSync(path.join(runnerDir, 'dist', 'build.json'), 'utf8'));
+const deployed = await fetch(new URL('/build', WORKER_URL)).then(response => response.ok ? response.json() : { id: `HTTP ${response.status}` });
+if (deployed.id !== build) {
+  process.stderr.write(`node-run: ${WORKER_URL} is deployed from build ${deployed.id}, but runner/dist is build ${build}; deploy runner/dist again\n`);
+  process.exit(1);
+}
+
 let args = process.argv.slice(2);
 const binding = args.find(arg => arg.startsWith('binding='))?.slice('binding='.length) ?? 'BROWSER';
 args = args.filter(arg => !arg.startsWith('binding='));
@@ -50,7 +59,7 @@ function remoteFork(modulePath, options) {
     child.stderr.pipe(process.stderr);
 
   const socket = new WebSocket(`${WORKER_URL.replace(/^http/, 'ws')}/worker?token=${encodeURIComponent(RUN_TOKEN)}`);
-  const pending = [JSON.stringify({ env, binding })];
+  const pending = [JSON.stringify({ build, env, binding })];
   let exited = false;
   const exit = code => {
     if (exited)
