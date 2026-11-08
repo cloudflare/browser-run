@@ -57,31 +57,33 @@ fs.writeFileSync(path.join(outDir, 'worker-payload.txt'), worker.source);
 
 const { config: base } = await loadConfigFromFile({ command: 'build', mode: 'production' }, path.join(testsDir, 'vite.config.ts'));
 const entryNames = new Map([...virtualPaths.keys()].map((file, index) => [`entry-${index}`, file]));
+const plugins = [
+  {
+    // The aliases send `@playwright/test`, `pageTest` and `browserTest` to
+    // workerFixtures.ts, and browser-run's own specs import it directly.
+    name: 'runner-fixtures',
+    enforce: 'pre',
+    async resolveId(source, importer, options) {
+      if (!importer || importer === runnerFixtures)
+        return null;
+      const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
+      return resolved?.id === workerFixtures ? runnerFixtures : resolved;
+    },
+  },
+  ...base.plugins.filter(plugin => plugin.name === 'resolve-playwright-package-imports'),
+];
+const resolve = {
+  alias: [
+    { find: '@cloudflare/browser-test-runtime', replacement: path.join(cloudflareTestsDir, 'runner/runtime.ts') },
+    ...Object.entries(base.resolve.alias).map(([find, replacement]) => ({ find, replacement })),
+  ],
+};
 await build({
   configFile: false,
   root: testsDir,
   logLevel: 'warn',
-  plugins: [
-    {
-      // The aliases send `@playwright/test`, `pageTest` and `browserTest` to
-      // workerFixtures.ts, and browser-run's own specs import it directly.
-      name: 'runner-fixtures',
-      enforce: 'pre',
-      async resolveId(source, importer, options) {
-        if (!importer || importer === runnerFixtures)
-          return null;
-        const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-        return resolved?.id === workerFixtures ? runnerFixtures : resolved;
-      },
-    },
-    ...base.plugins.filter(plugin => plugin.name === 'resolve-playwright-package-imports'),
-  ],
-  resolve: {
-    alias: [
-      { find: '@cloudflare/browser-test-runtime', replacement: path.join(cloudflareTestsDir, 'runner/runtime.ts') },
-      ...Object.entries(base.resolve.alias).map(([find, replacement]) => ({ find, replacement })),
-    ],
-  },
+  plugins,
+  resolve,
   build: {
     outDir: modulesDir,
     emptyOutDir: true,
@@ -93,6 +95,47 @@ await build({
       // `playwright/test` is mapped to the payloads by the spec runner.
       external: id => /^(node|cloudflare):/.test(id) || id === 'playwright/test',
       output: { entryFileNames: '[name].js', chunkFileNames: 'chunk-[hash].js' },
+    },
+  },
+});
+
+// The same config and specs for upstream's runner in Node (runner/node-run.mjs),
+// which only lists their tests: at runner/dist/node/project/<path> for each
+// /project/<path>, so test IDs agree with the isolates', and with what exists
+// only in a Worker stubbed.
+const nodeStub = '\0node-stub:';
+await build({
+  configFile: false,
+  root: testsDir,
+  logLevel: 'warn',
+  plugins: [
+    {
+      name: 'node-stubs',
+      enforce: 'pre',
+      resolveId: source => /^(cloudflare:|@cloudflare\/playwright(\/|$))/.test(source) ? { id: nodeStub + source, syntheticNamedExports: true } : null,
+      load: id => id.startsWith(nodeStub) ? `
+const stub = name => new Proxy(function () {}, {
+  // Playwright reads a function fixture's parameters from toString() and
+  // caches them on it under a symbol.
+  get: (target, key) => key === 'then' || typeof key === 'symbol' ? target[key] : key === 'toString' ? () => 'function () {}' : stub(name + '.' + key),
+  apply: () => { throw new Error(name + ' is only available in a Worker, not while Node lists tests'); },
+  construct: () => { throw new Error(name + ' is only available in a Worker, not while Node lists tests'); },
+});
+export default stub(${JSON.stringify(id.slice(nodeStub.length))});
+` : null,
+    },
+    ...plugins,
+  ],
+  resolve,
+  build: {
+    outDir: path.join(outDir, 'node', 'project'),
+    emptyOutDir: true,
+    minify: false,
+    target: 'node22',
+    lib: { entry: Object.fromEntries([...virtualPaths].map(([real, file]) => [path.posix.relative(PROJECT_ROOT, file), real])), formats: ['cjs'] },
+    rollupOptions: {
+      external: id => /^node:/.test(id) || id === 'playwright/test',
+      output: { entryFileNames: '[name]', chunkFileNames: 'chunks/[name]-[hash].cjs' },
     },
   },
 });
