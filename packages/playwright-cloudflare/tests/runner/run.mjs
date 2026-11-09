@@ -51,9 +51,10 @@ await runPlaywright({
   buildIdFile,
   headers,
   forwardEnv: ['BROWSER_BINDING'],
-  // An isolate's memory grows with each spec file it runs; at 4 files, about
-  // one isolate in a full run still exceeded its limit.
-  groupsPerIsolate: 2,
+  // An isolate's memory grows with each spec file it runs. Fewer files per
+  // isolate did not stop the rare out-of-memory failure, which comes from the
+  // screenshot tests' peak within one file, and made the run slower.
+  groupsPerIsolate: 4,
   // Errors and steps the isolates report name the specs, not Node's bundles.
   sources: readSources(path.join(runnerDir, 'dist', 'sources.json')),
   args: process.argv.slice(2),
