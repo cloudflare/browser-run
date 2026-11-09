@@ -31,10 +31,14 @@ const headers = {
   ...(CF_ACCESS_CLIENT_ID && { 'CF-Access-Client-Id': CF_ACCESS_CLIENT_ID, 'CF-Access-Client-Secret': CF_ACCESS_CLIENT_SECRET }),
 };
 
+// Until a few answers in a row come from this build with this token: for a
+// while after a deploy, some requests still reach the previous version.
+const SETTLED_ANSWERS = 3;
 const build = fs.readFileSync(buildIdFile, 'utf8').trim();
-for (const deadline = Date.now() + DEPLOY_WAIT_MS; ;) {
+for (let settled = 0, deadline = Date.now() + DEPLOY_WAIT_MS; ;) {
   const served = await workerServerInfo(workerUrl, headers).then(info => info.build, error => error.message);
-  if (served === build)
+  settled = served === build ? settled + 1 : 0;
+  if (settled === SETTLED_ANSWERS)
     break;
   if (Date.now() > deadline)
     fail(`${workerUrl} still serves ${served}, not build ${build}`);
