@@ -30,6 +30,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildRunnerPayload, buildWorkerPayload, collectProjectFiles } from '@cloudflare/kitebuild-playwright-spec-runner/build';
+import { decode, encode } from '@jridgewell/sourcemap-codec';
 import { build, loadConfigFromFile } from 'vite';
 
 import { playwrightDir, playwrightVendoredImports } from '../../../browser-test-runtime/utils/vite-playwright.js';
@@ -173,6 +174,31 @@ export default stub(${JSON.stringify(id.slice(nodeStub.length))});
   },
 });
 
+// An isolate parses a module's whole map the first time a stack frame in it is
+// mapped, and keeps it: the chunk holding @cloudflare/playwright/internal
+// alone took 45 MiB of the isolate's 128. Only the specs and their helpers are
+// kept, which is where reported locations point; frames in library code keep
+// the bundle's own.
+const reportedSource = source => [upstreamTestsDir, cloudflareTestsDir, runnerDir].some(dir => source.startsWith(dir + path.sep)) || source.startsWith(`${PROJECT_ROOT}/`);
+function reportedMappings(map) {
+  const sources = [];
+  const index = map.sources.map(source => reportedSource(source) ? sources.push(source) - 1 : -1);
+  // Where a dropped run follows a kept segment on a line, an unmapped column
+  // ends it, so a frame there is not given that segment's source. Names are
+  // dropped too; stack mapping does not use them.
+  const lines = decode(map.mappings).map(line => {
+    const kept = [];
+    for (const [column, source, sourceLine, sourceColumn] of line) {
+      if (source !== undefined && index[source] >= 0)
+        kept.push([column, index[source], sourceLine, sourceColumn]);
+      else if (kept.length && kept.at(-1).length > 1)
+        kept.push([column]);
+    }
+    return kept;
+  });
+  return { ...map, sources, names: [], mappings: encode(lines) };
+}
+
 const project = { modules: {}, entries: {}, maps: {} };
 for (const key of fs.readdirSync(modulesDir).filter(name => name.endsWith('.js'))) {
   project.modules[key] = fs.readFileSync(path.join(modulesDir, key), 'utf8');
@@ -185,7 +211,7 @@ for (const key of fs.readdirSync(modulesDir).filter(name => name.endsWith('.js')
     return virtualPaths.get(real) ?? real;
   });
   delete map.sourcesContent;
-  project.maps[key] = JSON.stringify(map);
+  project.maps[key] = JSON.stringify(reportedMappings(map));
 }
 const specs = [...virtualPaths].filter(([, file]) => file.startsWith(`${PROJECT_ROOT}/tests/`));
 const assets = assetNames(specs.map(([real]) => real), path.join(upstreamTestsDir, 'assets'));
