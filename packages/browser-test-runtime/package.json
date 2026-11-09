@@ -27,6 +27,6 @@
     "build:patched": "npm run ci:playwright && npm run generate-injected:core && npm run ci:bundles && npm run build:bundles && vite build"
   },
   "devDependencies": {
-    "vite": "^6.4.3"
+    "vite": "^6.4.5"
   }
 }
