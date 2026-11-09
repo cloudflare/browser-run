@@ -16,7 +16,9 @@
 // - build-id.txt: an ID for the above; kitebuild-playwright refuses a Worker
 //   deployed from another build.
 // - node/project: the config and specs again, laid out like /project, from
-//   which the runner in Node lists the tests.
+//   which the runner in Node lists the tests, with source maps to the specs.
+// - sources.json: each /project file's source, relative to runner/dist, for
+//   the paths the isolates report (kitebuild-playwright's `sources`).
 //
 // Usage: node runner/build.mjs [spec ...], with specs named as in skipTests.ts
 // (page/page-basic.spec.ts, browser-rendering/user-agent.spec.ts); the whole
@@ -161,6 +163,8 @@ export default stub(${JSON.stringify(id.slice(nodeStub.length))});
     emptyOutDir: true,
     minify: false,
     target: 'node22',
+    // So that upstream gives test locations in the specs themselves.
+    sourcemap: true,
     lib: { entry: Object.fromEntries([...virtualPaths].map(([real, file]) => [path.posix.relative(PROJECT_ROOT, file), real])), formats: ['cjs'] },
     rollupOptions: {
       external: id => /^node:/.test(id) || id === 'playwright/test',
@@ -210,6 +214,8 @@ for (const [real, file] of virtualPaths) {
   tree.nodes[file] = { type: 'file', size: Buffer.byteLength(text), mtimeMs: 0, text };
 }
 fs.writeFileSync(path.join(outDir, 'tree.json'), JSON.stringify(tree));
+// The isolates map their stack frames to /project with the specs' own lines.
+fs.writeFileSync(path.join(outDir, 'sources.json'), JSON.stringify(Object.fromEntries([...virtualPaths].map(([real, file]) => [file, path.relative(outDir, real)]))));
 
 // What the Worker deploys from this build. A Worker deployed from another
 // need not have the test IDs the Node copy lists.

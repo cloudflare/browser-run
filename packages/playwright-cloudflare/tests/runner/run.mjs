@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { runPlaywright, workerServerInfo } from '@cloudflare/kitebuild-playwright-spec-runner/node';
+import { readSources, runPlaywright, workerServerInfo } from '@cloudflare/kitebuild-playwright-spec-runner/node';
 
 const runnerDir = path.dirname(fileURLToPath(import.meta.url));
 const buildIdFile = path.join(runnerDir, 'dist', 'build-id.txt');
@@ -53,5 +53,7 @@ await runPlaywright({
   forwardEnv: ['BROWSER_BINDING'],
   // An isolate runs out of memory after a dozen or so spec files.
   groupsPerIsolate: 4,
+  // Errors and steps the isolates report name the specs, not Node's bundles.
+  sources: readSources(path.join(runnerDir, 'dist', 'sources.json')),
   args: process.argv.slice(2),
 }).catch(error => fail(error.message));
