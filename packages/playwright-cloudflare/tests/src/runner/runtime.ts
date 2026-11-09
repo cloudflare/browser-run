@@ -4,7 +4,10 @@
 // `playwright`.
 import { env } from 'cloudflare:workers';
 
-export { _baseTest, expect, mergeTests } from 'playwright/test';
+// Upstream's full `test`, as upstream's own test config uses, so its fixtures
+// the specs do not override run: `_setupArtifacts` among them, which reports
+// API calls as steps.
+export { test as _baseTest, expect, mergeTests } from 'playwright/test';
 
 // The host passes the run's settings to every worker process as environment.
 // Fixtures that need a session (sessionId, browser) are overridden in fixtures.ts.
@@ -16,8 +19,7 @@ export function currentTestContext() {
   };
 }
 
-// Upstream records API calls as steps through its own fixtures, which these
-// tests do not use, so there is no listener to install.
-export async function runWithExpectApiListener<T>(_instrumentation: unknown, use: () => Promise<T>): Promise<T> {
-  return await use();
+// Upstream's `_setupArtifacts` stays.
+export function setupArtifactsFixtures() {
+  return {};
 }

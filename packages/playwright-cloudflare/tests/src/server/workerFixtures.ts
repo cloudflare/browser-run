@@ -5,7 +5,7 @@ import {
   currentTestContext,
   expect as baseExpect,
   mergeTests,
-  runWithExpectApiListener,
+  setupArtifactsFixtures,
 } from '@cloudflare/browser-test-runtime';
 import playwright, { connect } from '@cloudflare/playwright';
 import { env } from 'cloudflare:workers';
@@ -411,13 +411,7 @@ export const test = platformTest.extend<PageTestFixtures & ServerFixtures & Test
     ));
   },
 
-  _setupArtifacts: [async ({}, use) => {
-    try {
-      await runWithExpectApiListener(playwright._instrumentation, use);
-    } finally {
-      playwright.selectors.setTestIdAttribute('data-testid');
-    }
-  }, { auto: 'all-hooks-included', timeout: 0 } as any],
+  ...setupArtifactsFixtures(playwright),
 
   toImplInWorkerScope: [async ({ playwright }, use) => {
     await use((playwright as any)._connection.toImpl);

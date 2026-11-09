@@ -81,3 +81,8 @@ export function runWithExpectApiListener<T>(
   instrumentation: Instrumentation,
   fn: () => Promise<T>,
 ): Promise<T>;
+
+export function setupArtifactsFixtures(playwright: {
+  _instrumentation: Instrumentation;
+  selectors: {setTestIdAttribute(name: string): void};
+}): any;

@@ -16,9 +16,9 @@
     "@cloudflare/kitebuild-playwright-spec-runner": "file:vendor/cloudflare-kitebuild-playwright-spec-runner-0.0.1.tgz",
     "@cloudflare/playwright": "file:..",
     "@cloudflare/workers-types": "^5.20260921.1",
-    "@playwright/test": "1.58.2",
+    "@playwright/test": "1.62.1",
     "@types/node": "^26.1.1",
-    "playwright": "1.58.2",
+    "playwright": "1.62.1",
     "tsd": "^0.31.1",
     "wrangler": "^4.137.0"
   },

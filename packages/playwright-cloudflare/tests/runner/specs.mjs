@@ -54,6 +54,14 @@ export function assetNames(specFiles, assetsDir) {
       if (fs.statSync(target).isDirectory() && !fs.readdirSync(target).some(entry => fs.statSync(path.join(target, entry)).isFile()))
         continue;
       names.add(name);
+      // A HAR keeps response bodies in sibling files it names itself.
+      if (name.endsWith('.har')) {
+        for (const entry of JSON.parse(fs.readFileSync(target, 'utf8')).log.entries) {
+          const file = entry.response?.content?._file;
+          if (file)
+            names.add(path.posix.join(path.posix.dirname(name), file));
+        }
+      }
     }
   }
   return [...names];

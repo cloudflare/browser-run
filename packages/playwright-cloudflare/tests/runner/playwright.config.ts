@@ -13,6 +13,13 @@ export default defineConfig({
   // Specs write under their output paths with the isolate's own fs, which can
   // only write in /tmp.
   outputDir: '/tmp/test-results',
+  // The specs are already bundled, and the isolates load them as they are.
+  // Upstream's transform in Node would print them again, changing titles
+  // made from a function's source and so the test IDs.
+  build: { external: ['**/*'] },
+  // As upstream's own config (tests/library/playwright.config.ts), which
+  // specs assert in call logs.
+  expect: { timeout: 10000 },
   workers: 6,
   retries: 1,
   timeout: 60 * 1000,

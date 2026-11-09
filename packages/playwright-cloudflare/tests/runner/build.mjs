@@ -23,17 +23,21 @@
 // suite (specs.mjs) by default.
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildRunnerPayload, buildWorkerPayload, collectProjectFiles } from '@cloudflare/kitebuild-playwright-spec-runner/build';
 import { build, loadConfigFromFile } from 'vite';
 
+import { playwrightDir, playwrightVendoredImports } from '../../../browser-test-runtime/utils/vite-playwright.js';
+
 import snapshots from './snapshots.json' with { type: 'json' };
 import { assetNames, suiteSpecs } from './specs.mjs';
 
 const PROJECT_ROOT = '/project';
 
+const require = createRequire(import.meta.url);
 const runnerDir = path.dirname(fileURLToPath(import.meta.url));
 const testsDir = path.dirname(runnerDir);
 const upstreamTestsDir = path.resolve(testsDir, '../../../submodules/playwright/tests');
@@ -87,17 +91,22 @@ const plugins = [
   },
   ...base.plugins.filter(plugin => plugin.name === 'resolve-playwright-package-imports'),
 ];
+// Upstream's sources and tests import their npm dependencies and its
+// utilsBundle barrel, which ../vite.config.ts rewrites to
+// @cloudflare/playwright/internal, there external; both builds below bundle it.
+const internal = require.resolve('@cloudflare/playwright/internal');
+const vendoredImports = target => playwrightVendoredImports({ target, include: [path.join(playwrightDir, 'packages'), upstreamTestsDir] });
 const resolve = {
   alias: [
     { find: '@cloudflare/browser-test-runtime', replacement: path.join(cloudflareTestsDir, 'runner/runtime.ts') },
-    ...Object.entries(base.resolve.alias).map(([find, replacement]) => ({ find, replacement })),
+    ...base.resolve.alias,
   ],
 };
 await build({
   configFile: false,
   root: testsDir,
   logLevel: 'warn',
-  plugins,
+  plugins: [...plugins, vendoredImports(internal)],
   resolve,
   build: {
     outDir: modulesDir,
@@ -128,7 +137,9 @@ await build({
     {
       name: 'node-stubs',
       enforce: 'pre',
-      resolveId: source => /^(cloudflare:|@cloudflare\/playwright(\/|$))/.test(source) ? { id: nodeStub + source, syntheticNamedExports: true } : null,
+      // @cloudflare/playwright/internal, utilities that upstream's modules
+      // call as they load, runs in Node as it is.
+      resolveId: source => /^(cloudflare:|@cloudflare\/playwright(\/test)?$)/.test(source) ? { id: nodeStub + source, syntheticNamedExports: true } : null,
       load: id => id.startsWith(nodeStub) ? `
 const stub = name => new Proxy(function () {}, {
   // Playwright reads a function fixture's parameters from toString() and
@@ -141,6 +152,7 @@ export default stub(${JSON.stringify(id.slice(nodeStub.length))});
 ` : null,
     },
     ...plugins,
+    vendoredImports(internal),
   ],
   resolve,
   build: {

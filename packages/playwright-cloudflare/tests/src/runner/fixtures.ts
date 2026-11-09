@@ -4,7 +4,7 @@
 // process and the skip lists applied.
 import path from 'path';
 
-import { launch } from '@cloudflare/playwright';
+import { chromium, launch } from '@cloudflare/playwright';
 
 import { test as base } from '../server/workerFixtures';
 import { skipErrorMessages, skipTests } from '../skipTests';
@@ -14,6 +14,12 @@ export * from '../server/workerFixtures';
 const skippedTitles = new Set(skipTests);
 
 export const test = base.extend<{ _skipLists: void }>({
+  // The client's Playwright, as upstream's own fixture gives, rather than the
+  // package's default export: upstream's _setupArtifacts lists its contexts.
+  playwright: [async ({}, run) => {
+    await run((chromium as any)._playwright);
+  }, { scope: 'worker' }],
+
   browser: [async ({ binding }, run) => {
     const browser = await launch(binding);
     await run(browser);

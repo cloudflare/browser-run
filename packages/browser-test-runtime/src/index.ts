@@ -325,3 +325,20 @@ export async function runWithExpectApiListener<T>(
     instrumentation.removeListener(expectApiListener);
   }
 }
+
+// The test fixtures' `_setupArtifacts`: this runtime's API listener in place
+// of upstream's fixture, which _baseTest does not have.
+export function setupArtifactsFixtures(playwright: {
+  _instrumentation: Instrumentation;
+  selectors: {setTestIdAttribute(name: string): void};
+}) {
+  return {
+    _setupArtifacts: [async ({}, use: () => Promise<void>) => {
+      try {
+        await runWithExpectApiListener(playwright._instrumentation, use);
+      } finally {
+        playwright.selectors.setTestIdAttribute('data-testid');
+      }
+    }, {auto: 'all-hooks-included', timeout: 0}],
+  } as any;
+}

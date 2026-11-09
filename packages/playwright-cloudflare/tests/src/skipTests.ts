@@ -60,6 +60,8 @@ export const skipTests: string[] = [
   'library/popup.spec.ts > BrowserContext.addInitScript should apply to an in-process popup',
   'library/popup.spec.ts > should expose function from browser context',
   'library/popup.spec.ts > should inherit touch support from browser context',
+  // Browser Run's launch takes no proxy option, so there is nothing to validate.
+  'library/proxy.spec.ts > should throw for bad server value',
   'library/popup.spec.ts > should inherit viewport size from browser context',
   'library/popup.spec.ts > should not dispatch binding on a closed page',
   'library/popup.spec.ts > should respect routes from browser context when using window.open',
@@ -72,7 +74,14 @@ export const skipTests: string[] = [
   // Screenshot completion is nondeterministic after remote focus emulation.
   'library/emulation-focus.spec.ts > should not affect screenshots',
   'library/shared-worker.spec.ts > should survive shared worker restart',
+  // Trace sources are read from the spec's file, which the browser client cannot
+  // read in a worker isolate: the isolate has the project only as modules.
+  'library/tracing.spec.ts > should collect sources',
   'library/tracing.spec.ts > should include context API requests',
+  'library/tracing.spec.ts > should not include trace resources from the previous chunks',
+  // Browser Run's launch takes no tracesDir.
+  'library/tracing.spec.ts > should not emit after w/o before',
+  'library/tracing.spec.ts > should respect tracesDir and name',
   // Reads the local artifacts folder. Upstream v1.58 skipped it in service mode, v1.62 does not.
   'library/tracing.spec.ts > should not flush console events',
   'page/elementhandle-screenshot.spec.ts > element screenshot > should capture full element when larger than viewport',
@@ -179,6 +188,9 @@ export const skipTests: string[] = [
   // server.waitForRequest skips the test while page.waitForEvent('worker') is still pending. The
   // pending wait then rejects during teardown and fails the test.
   'page/workers.spec.ts > should support extra http headers',
+  // Compares the remote browser's clock with the Worker's; upstream skips it on
+  // Android and WSL for the same difference.
+  'page/workers.spec.ts > should have timestamp on worker console messages',
 ];
 
 export const skipErrorMessages: Array<string | RegExp> = [
