@@ -45,8 +45,8 @@ concurrency:
 jobs:
   full-tests:
     runs-on: ubuntu-latest
-    # All branches deploy to the same test Worker, so only one job may use it at
-    # a time. Shared with the smoke workflow, which uses the same group name.
+    # All branches deploy to the same runner Worker, so only one job may use it
+    # at a time. Shared with the smoke workflow, which uses the same group name.
     concurrency:
       group: cf-playwright-worker-deployment
       cancel-in-progress: false
@@ -72,35 +72,44 @@ jobs:
           npm --prefix packages/playwright-cloudflare/tests run test-types
           npm run check:submodules
 
-      - name: Deploy test Worker
+      # Bundles the specs for upstream's runner in Node and for the runner
+      # Worker's isolates, and checks that both list the same tests, under a
+      # local wrangler dev that needs no credentials.
+      - name: Build the runner
+        working-directory: packages/playwright-cloudflare
+        run: |
+          npm run test:runner:build
+          npm run test:runner:check
+
+      - name: Deploy the runner Worker
         if: ${{ env.RUN_REMOTE_TESTS == 'true' }}
         working-directory: packages/playwright-cloudflare/tests
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Proxy tests read the test list from the deployed Worker. Export the
-        # new version ID so generation waits until that version serves requests.
+        # A new token for every run. runner/run.mjs waits until the Worker
+        # serves this build with it.
         run: |
-          set -o pipefail
-          npx wrangler deploy | tee "$RUNNER_TEMP/wrangler-deploy.log"
-          version="$(sed -n 's/^Current Version ID: //p' "$RUNNER_TEMP/wrangler-deploy.log" | tail -n 1)"
-          test -n "$version"
-          echo "EXPECTED_WORKER_VERSION=$version" >> "$GITHUB_ENV"
+          npx wrangler deploy -c wrangler.runner.toml
+          token="$(openssl rand -hex 24)"
+          echo "::add-mask::$token"
+          echo "RUN_TOKEN=$token" >> "$GITHUB_ENV"
+          printf '%s' "$token" | npx wrangler secret put RUN_TOKEN -c wrangler.runner.toml
 
       - name: Run tests
         if: ${{ env.RUN_REMOTE_TESTS == 'true' }}
         working-directory: packages/playwright-cloudflare
         env:
-          TESTS_SERVER_URL: https://playwright-test-workers.rendering.cfdata.org
+          RUNNER_URL: https://playwright-test-runner.rendering.cfdata.org
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           TEST_GREP: ${{ inputs.grep }}
         run: |
-          args=(--reporter=html)
+          args=(--project=suite --reporter=html)
           if [[ -n "${TEST_GREP}" ]]; then
             args+=(--grep "${TEST_GREP}")
           fi
-          npm run test:full -- "${args[@]}"
+          npm run test:runner -- "${args[@]}"
 
       - name: Upload HTML report
         uses: actions/upload-artifact@v4

@@ -25,36 +25,36 @@ jobs:
           git submodule update --init
           cd packages/playwright-cloudflare
           npm run build
-          npm run test:prepare:built
+          npm run test:runner:build
+          npm run test:runner:check
 
-      - name: Deploy test Worker
+      - name: Deploy the runner Worker
         working-directory: packages/playwright-cloudflare/tests
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # Proxy tests read the test list from the deployed Worker. Export the
-        # new version ID so generation waits until that version serves requests.
+        # A new token for every run. runner/run.mjs waits until the Worker
+        # serves this build with it.
         run: |
-          set -o pipefail
-          npx wrangler deploy | tee "$RUNNER_TEMP/wrangler-deploy.log"
-          version="$(sed -n 's/^Current Version ID: //p' "$RUNNER_TEMP/wrangler-deploy.log" | tail -n 1)"
-          test -n "$version"
-          echo "EXPECTED_WORKER_VERSION=$version" >> "$GITHUB_ENV"
+          npx wrangler deploy -c wrangler.runner.toml
+          token="$(openssl rand -hex 24)"
+          echo "::add-mask::$token"
+          echo "RUN_TOKEN=$token" >> "$GITHUB_ENV"
+          printf '%s' "$token" | npx wrangler secret put RUN_TOKEN -c wrangler.runner.toml
 
       - name: Type-check Cloudflare CDP types
         run: |
           cd packages/playwright-cloudflare/tests
-          npm ci
           npm run test-types
 
       - name: Run Smoke Tests
         working-directory: packages/playwright-cloudflare
         env:
-          TESTS_SERVER_URL: https://playwright-test-workers.rendering.cfdata.org
+          RUNNER_URL: https://playwright-test-runner.rendering.cfdata.org
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
         run: |
-          npm run test:smoke -- --reporter=html
+          npm run test:runner -- --project=suite --grep "@smoke" --reporter=html
 
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
