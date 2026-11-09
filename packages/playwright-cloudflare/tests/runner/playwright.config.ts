@@ -1,6 +1,7 @@
-// Upstream Playwright Test's config for runs in the deployed Worker. Paths are
-// virtual: runner/build.mjs places the specs under /project/tests and the smoke
-// project under /project/smoke.
+// Upstream Playwright Test's config, for its runner in Node and its worker
+// processes in the runner Worker's isolates. runner/build.mjs bundles it for
+// both, with the specs under tests/ and the smoke project under smoke/ of
+// /project in the isolates and of runner/dist/node/project in Node.
 import { defineConfig } from 'playwright/test';
 
 // Upstream's own template, so the specs find their *-chromium snapshots;
@@ -18,7 +19,8 @@ export default defineConfig({
   reporter: 'list',
   projects: [
     { name: 'suite', testDir: './tests' },
-    // One pass and one deliberate failure, to check a run end to end.
+    // One pass, one known-error skip and one deliberate failure, to check the
+    // runner itself end to end; CI runs --project=suite.
     { name: 'smoke', testDir: './smoke', retries: 0 },
   ],
 });

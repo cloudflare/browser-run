@@ -6,9 +6,6 @@ import { env } from 'cloudflare:workers';
 
 export { _baseTest, expect, mergeTests } from 'playwright/test';
 
-// Before @cloudflare/playwright evaluates, as underTest.ts does for the old Worker.
-process.env.PWTEST_UNDER_TEST = 'true';
-
 // The host passes the run's settings to every worker process as environment.
 // Fixtures that need a session (sessionId, browser) are overridden in fixtures.ts.
 export function currentTestContext() {

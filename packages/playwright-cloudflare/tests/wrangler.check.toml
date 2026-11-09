@@ -1,0 +1,9 @@
+# Local only, under wrangler dev: lists the tests the runner Worker's isolates
+# see (src/runner/check.ts), for npm run test:runner:check. Never deployed.
+name = "playwright-test-runner-check"
+main = "src/runner/check.ts"
+compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-04-04"
+
+[[worker_loaders]]
+binding = "LOADER"

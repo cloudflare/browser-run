@@ -1,9 +1,18 @@
-# Runs upstream Playwright Test in Worker Loader isolates (src/runner/index.ts).
-# Build runner/dist first: node runner/build.mjs
+# The runner Worker (src/runner/index.ts): runs the worker processes of
+# upstream's Playwright Test runner, which runs in Node with kitebuild-playwright.
+# Build runner/dist first: npm run test:runner:build in packages/playwright-cloudflare.
 name = "playwright-test-runner"
 main = "src/runner/index.ts"
 compatibility_flags = ["nodejs_compat"]
 compatibility_date = "2026-04-04"
+workers_dev = false
+
+# Specs reach a second origin at the first label plus -cross-origin
+# (CROSS_PROCESS_PREFIX in src/server/workerFixtures.ts).
+routes = [
+  { pattern = "playwright-test-runner.rendering.cfdata.org", custom_domain = true },
+  { pattern = "playwright-test-runner-cross-origin.rendering.cfdata.org", custom_domain = true },
+]
 
 [browser]
 binding = "BROWSER"

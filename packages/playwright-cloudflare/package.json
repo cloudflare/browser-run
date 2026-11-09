@@ -41,7 +41,10 @@
     "test:full": "npm run test:generate:proxy && cd tests && npx playwright test",
     "test:smoke": "npm run test:generate:proxy && cd tests && npx playwright test --grep \"@smoke\"",
     "test:runner:build": "npm run ci:tests && node ../../scripts/with-patch.mjs playwright npm run test:runner:build:patched --",
-    "test:runner:build:patched": "cd tests && node runner/build.mjs"
+    "test:runner:build:patched": "cd tests && node runner/build.mjs",
+    "test:runner:check": "cd tests && node runner/check.mjs",
+    "test:runner:deploy": "cd tests && npx wrangler deploy -c wrangler.runner.toml",
+    "test:runner": "cd tests && node runner/run.mjs"
   },
   "devDependencies": {
     "@tsconfig/node18": "^18.2.6",

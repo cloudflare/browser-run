@@ -1,20 +1,26 @@
-// Builds what the runner Worker (src/runner/index.ts) loads into Worker Loader
-// isolates, under runner/dist/:
+// Builds the suite for upstream's Playwright Test runner in Node, whose worker
+// processes run in Worker Loader isolates behind the runner Worker
+// (src/runner/index.ts), under runner/dist/:
 //
-// - runner-payload.txt, worker-payload.txt: upstream Playwright Test, built by
+// - worker-payload.txt: upstream's worker process, built by
 //   @cloudflare/kitebuild-playwright-spec-runner from the installed `playwright`
 //   and @cloudflare/playwright (the client under test).
+// - runner-payload.txt: upstream's runner, for the local check Worker only
+//   (src/runner/check.ts), which lists the tests the isolates see.
 // - project.json: the config and specs bundled with the aliases of
 //   ../vite.config.ts, one entry module per file, and their source maps; and,
-//   base64-encoded, the specs' snapshots and the assets they name in
-//   asset('...'), which reads /bundle/assets/<name>.
-// - tree.json: the virtual project the runner walks: /project/playwright.config.ts,
+//   base64-encoded, the specs' snapshots and the assets they name, which
+//   asset() reads at /bundle/assets/<name>.
+// - tree.json: the isolates' project: /project/playwright.config.ts,
 //   /project/tests/<spec> and /project/smoke/<spec>.
-// - build.json: an ID for the above, which the Worker reports at /build.
-// - node/project: the config and specs again, for upstream's runner in Node.
+// - build-id.txt: an ID for the above; kitebuild-playwright refuses a Worker
+//   deployed from another build.
+// - node/project: the config and specs again, laid out like /project, from
+//   which the runner in Node lists the tests.
 //
 // Usage: node runner/build.mjs [spec ...], with specs named as in skipTests.ts
-// (page/page-basic.spec.ts, browser-rendering/user-agent.spec.ts).
+// (page/page-basic.spec.ts, browser-rendering/user-agent.spec.ts); the whole
+// suite (specs.mjs) by default.
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -24,9 +30,9 @@ import { buildRunnerPayload, buildWorkerPayload, collectProjectFiles } from '@cl
 import { build, loadConfigFromFile } from 'vite';
 
 import snapshots from './snapshots.json' with { type: 'json' };
+import { assetNames, suiteSpecs } from './specs.mjs';
 
 const PROJECT_ROOT = '/project';
-const PILOT_SPECS = ['page/page-basic.spec.ts', 'browser-rendering/user-agent.spec.ts'];
 
 const runnerDir = path.dirname(fileURLToPath(import.meta.url));
 const testsDir = path.dirname(runnerDir);
@@ -46,7 +52,7 @@ const specFile = name => {
 
 // Real path -> virtual project path, for every file the runner may load.
 const virtualPaths = new Map([[path.join(runnerDir, 'playwright.config.ts'), `${PROJECT_ROOT}/playwright.config.ts`]]);
-for (const name of process.argv.length > 2 ? process.argv.slice(2) : PILOT_SPECS)
+for (const name of process.argv.length > 2 ? process.argv.slice(2) : suiteSpecs({ upstreamTestsDir, cloudflareTestsDir }))
   virtualPaths.set(specFile(name), `${PROJECT_ROOT}/tests/${name}`);
 for (const name of fs.readdirSync(path.join(runnerDir, 'smoke')))
   virtualPaths.set(path.join(runnerDir, 'smoke', name), `${PROJECT_ROOT}/smoke/${name}`);
@@ -64,9 +70,15 @@ const plugins = [
   {
     // The aliases send `@playwright/test`, `pageTest` and `browserTest` to
     // workerFixtures.ts, and browser-run's own specs import it directly.
+    // `@cloudflare/playwright`, which the aliases also give `playwright` and
+    // `playwright-core`, is the worker payload's client in the isolates: a
+    // copy here would be a second client, and its code and source maps
+    // would fill every isolate.
     name: 'runner-fixtures',
     enforce: 'pre',
     async resolveId(source, importer, options) {
+      if (source === '@cloudflare/playwright')
+        return { id: source, external: true };
       if (!importer || importer === runnerFixtures)
         return null;
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
@@ -89,6 +101,7 @@ await build({
   resolve,
   build: {
     outDir: modulesDir,
+    commonjsOptions: base.build.commonjsOptions,
     emptyOutDir: true,
     minify: false,
     target: 'esnext',
@@ -102,8 +115,8 @@ await build({
   },
 });
 
-// The same config and specs for upstream's runner in Node (runner/node-run.mjs),
-// which only lists their tests: at runner/dist/node/project/<path> for each
+// The same config and specs for upstream's runner in Node, which only lists
+// their tests: at runner/dist/node/project/<path> for each
 // /project/<path>, so test IDs agree with the isolates', and with what exists
 // only in a Worker stubbed.
 const nodeStub = '\0node-stub:';
@@ -132,6 +145,7 @@ export default stub(${JSON.stringify(id.slice(nodeStub.length))});
   resolve,
   build: {
     outDir: path.join(outDir, 'node', 'project'),
+    commonjsOptions: base.build.commonjsOptions,
     emptyOutDir: true,
     minify: false,
     target: 'node22',
@@ -158,11 +172,7 @@ for (const key of fs.readdirSync(modulesDir).filter(name => name.endsWith('.js')
   project.maps[key] = JSON.stringify(map);
 }
 const specs = [...virtualPaths].filter(([, file]) => file.startsWith(`${PROJECT_ROOT}/tests/`));
-// Every string in a spec naming something under assets/: names also reach
-// asset() through variables, such as a list of files to upload.
-const assetNames = new Set(specs.flatMap(([real]) =>
-  [...fs.readFileSync(real, 'utf8').matchAll(/'([^'\n]+)'/g)].map(match => match[1])
-      .filter(name => !name.startsWith('/') && !name.includes('..') && fs.existsSync(path.join(upstreamTestsDir, 'assets', name)))));
+const assets = assetNames(specs.map(([real]) => real), path.join(upstreamTestsDir, 'assets'));
 const binary = collectProjectFiles({
   snapshots: {
     snapshotPathTemplate: snapshots.snapshotPathTemplate,
@@ -175,7 +185,7 @@ const binary = collectProjectFiles({
     },
   },
   // A name may be a directory, such as axe-core/implicit-role.
-  assets: [{ dir: upstreamTestsDir, include: [...assetNames].flatMap(name => [`assets/${name}`, `assets/${name}/**`]) }],
+  assets: [{ dir: upstreamTestsDir, include: assets.flatMap(name => [`assets/${name}`, `assets/${name}/**`]) }],
 });
 project.files = Object.fromEntries(Object.entries(binary.files).map(([key, bytes]) => [key, Buffer.from(bytes).toString('base64')]));
 fs.writeFileSync(path.join(outDir, 'project.json'), JSON.stringify(project));
@@ -189,12 +199,12 @@ for (const [real, file] of virtualPaths) {
 }
 fs.writeFileSync(path.join(outDir, 'tree.json'), JSON.stringify(tree));
 
-// What the Worker deploys from this build; node-run.mjs refuses a Worker
-// deployed from another, whose test IDs need not match the Node copy's.
+// What the Worker deploys from this build. A Worker deployed from another
+// need not have the test IDs the Node copy lists.
 const buildId = createHash('sha256');
 for (const name of ['worker-payload.txt', 'project.json', 'tree.json'])
   buildId.update(fs.readFileSync(path.join(outDir, name)));
-fs.writeFileSync(path.join(outDir, 'build.json'), JSON.stringify({ id: buildId.digest('hex').slice(0, 16) }));
+fs.writeFileSync(path.join(outDir, 'build-id.txt'), buildId.digest('hex').slice(0, 16));
 
 const fileBytes = Object.values(binary.files).reduce((total, bytes) => total + bytes.byteLength, 0);
-console.log(`runner/dist: playwright ${runner.playwrightVersion}, ${Object.keys(project.entries).length} entries, ${Object.keys(project.modules).length} modules, ${Object.keys(binary.files).length} files (${(fileBytes / 1024).toFixed(0)} KiB)`);
+console.log(`runner/dist: playwright ${runner.playwrightVersion}, ${specs.length} specs, ${Object.keys(project.modules).length} modules, ${Object.keys(binary.files).length} files (${(fileBytes / 1024).toFixed(0)} KiB)`);
