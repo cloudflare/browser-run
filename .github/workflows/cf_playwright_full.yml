@@ -87,14 +87,16 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        # A new token for every run. runner/run.mjs waits until the Worker
-        # serves this build with it.
+        # A new token for every run, deployed in the same version as the
+        # build, so no version serves this build with an older token.
+        # runner/run.mjs waits until the Worker serves this build.
         run: |
-          npx wrangler deploy -c wrangler.runner.toml
           token="$(openssl rand -hex 24)"
           echo "::add-mask::$token"
           echo "RUN_TOKEN=$token" >> "$GITHUB_ENV"
-          printf '%s' "$token" | npx wrangler secret put RUN_TOKEN -c wrangler.runner.toml
+          printf 'RUN_TOKEN=%s\n' "$token" > "$RUNNER_TEMP/runner.secrets"
+          npx wrangler deploy -c wrangler.runner.toml --secrets-file "$RUNNER_TEMP/runner.secrets"
+          rm "$RUNNER_TEMP/runner.secrets"
 
       - name: Run tests
         if: ${{ env.RUN_REMOTE_TESTS == 'true' }}
