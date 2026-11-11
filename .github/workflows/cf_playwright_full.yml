@@ -103,6 +103,8 @@ jobs:
         working-directory: packages/playwright-cloudflare
         env:
           RUNNER_URL: https://playwright-test-runner.rendering.cfdata.org
+          # Diagnostic: workers report their isolate's /tmp as each test begins.
+          KITEBUILD_PLAYWRIGHT_TMP_REPORT: '1'
           CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
           CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
           TEST_GREP: ${{ inputs.grep }}

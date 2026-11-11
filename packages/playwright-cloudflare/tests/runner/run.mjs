@@ -50,7 +50,8 @@ await runPlaywright({
   projectRoot: path.join(runnerDir, 'dist', 'node', 'project'),
   buildIdFile,
   headers,
-  forwardEnv: ['BROWSER_BINDING'],
+  // KITEBUILD_PLAYWRIGHT_TMP_REPORT: each worker reports its isolate's /tmp as each test begins.
+  forwardEnv: ['BROWSER_BINDING', 'KITEBUILD_PLAYWRIGHT_TMP_REPORT'],
   // An isolate's memory grows with each spec file it runs. Fewer files per
   // isolate did not stop the rare out-of-memory failure, which comes from the
   // screenshot tests' peak within one file, and made the run slower.
