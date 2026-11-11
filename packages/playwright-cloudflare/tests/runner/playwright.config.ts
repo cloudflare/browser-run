@@ -13,6 +13,10 @@ export default defineConfig({
   // Specs write under their output paths with the isolate's own fs, which can
   // only write in /tmp.
   outputDir: '/tmp/test-results',
+  // An isolate's /tmp counts against its memory for its whole life, and
+  // attachments reach the runner with their bytes, so nothing reads a test's
+  // output there after it ends: upstream removes it after each test.
+  preserveOutput: 'never',
   // The specs are already bundled, and the isolates load them as they are.
   // Upstream's transform in Node would print them again, changing titles
   // made from a function's source and so the test IDs.

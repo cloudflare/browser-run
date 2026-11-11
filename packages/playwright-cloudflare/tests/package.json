@@ -13,7 +13,7 @@
     "@cloudflare/browser-test-runtime": "file:../../browser-test-runtime"
   },
   "devDependencies": {
-    "@cloudflare/kitebuild-playwright-spec-runner": "file:vendor/cloudflare-kitebuild-playwright-spec-runner-0.0.1.tgz",
+    "@cloudflare/kitebuild-playwright-spec-runner": "file:vendor/cloudflare-kitebuild-playwright-spec-runner-0.0.2.tgz",
     "@cloudflare/playwright": "file:..",
     "@cloudflare/workers-types": "^5.20260921.1",
     "@jridgewell/sourcemap-codec": "1.6.0",
