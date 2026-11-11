@@ -1,6 +1,6 @@
 {
   "name": "@cloudflare/playwright-mcp",
-  "version": "0.0.6-next",
+  "version": "0.0.6",
   "description": "Cloudflare Playwright Tools for MCP",
   "type": "module",
   "repository": {
