@@ -30,6 +30,9 @@ const CONFIG_WORKERS = 6;
 // session has no client.
 const KEEP_ALIVE_MS = 10 * 60 * 1000;
 const PLAYWRIGHT_CHILD = 'KITEBUILD_PLAYWRIGHT_CHILD';
+// Browser Run answers 429 or 503 while the account is at its browser limit,
+// for example while the previous run's sessions are still ending.
+const ACQUIRE_WAIT_MS = 5 * 60 * 1000;
 
 function fail(message) {
   process.stderr.write(`run: ${message}\n`);
@@ -126,10 +129,6 @@ function browserUrl(pathname) {
   url.searchParams.set('binding', BROWSER_BINDING);
   return url;
 }
-
-// Browser Run answers 429 or 503 while the account is at its browser limit,
-// for example while the previous run's sessions are still ending.
-const ACQUIRE_WAIT_MS = 5 * 60 * 1000;
 
 async function acquireSession() {
   const url = browserUrl('');
