@@ -55,9 +55,10 @@ if (process.env[PLAYWRIGHT_CHILD]) {
     forwardEnv: ['BROWSER_BINDING', 'BROWSER_SESSION_IDS', 'KITEBUILD_PLAYWRIGHT_TMP_REPORT'],
     // A full-page screenshot comparison can leave more than half an isolate's
     // memory charged until it is collected, and a long-lived isolate need not
-    // collect in time. With the config's fullyParallel, that is one isolate
-    // per independent test.
-    groupsPerIsolate: 1,
+    // collect in time. With the config's fullyParallel each independent test
+    // is a group: three tests per isolate was as safe as one for the screenshot
+    // specs and spent less time starting isolates; four saved little more.
+    groupsPerIsolate: 3,
     // Errors and steps the isolates report name the specs, not Node's bundles.
     sources: readSources(path.join(runnerDir, 'dist', 'sources.json')),
     args,
@@ -136,7 +137,22 @@ async function acquireSession() {
   const { sessionId } = JSON.parse(body);
   if (!sessionId)
     throw new Error(`acquiring a browser session answered without a sessionId: ${body.slice(0, 200)}`);
+  await waitForSession(sessionId);
   return sessionId;
+}
+
+// A just-acquired session can take a moment to accept connections.
+async function waitForSession(sessionId) {
+  const url = new URL(`/browser/v1/devtools/session/${sessionId}`, RUNNER_URL);
+  url.searchParams.set('binding', BROWSER_BINDING);
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+    await response.body?.cancel();
+    if (response.ok)
+      return;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  throw new Error(`browser session ${sessionId} was acquired but did not become available`);
 }
 
 // Best effort: a session nobody closes ends after KEEP_ALIVE_MS without a client.
