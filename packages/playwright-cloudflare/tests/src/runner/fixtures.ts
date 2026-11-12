@@ -41,8 +41,8 @@ export const test = base.extend<{ _skipLists: void }, { _lentSessionId: string }
   //
   // After a failure the lent browser is ended rather than left for the next
   // worker process: a browser placed far from the Worker fails timing-sensitive
-  // specs every time, retries included, and Browser Run places each launch
-  // anew. The slot's later worker processes then launch their own.
+  // specs every time, retries included. runner/run.mjs then lends the slot a
+  // new session, placed anew; isolates that start before it does launch their own.
   browser: [async ({ binding, _lentSessionId: sessionId }, run) => {
     let lent = true;
     const browser = await connect(binding, sessionId).catch(async error => {
@@ -54,7 +54,7 @@ export const test = base.extend<{ _skipLists: void }, { _lentSessionId: string }
     });
     await run(browser);
     if (lent && testFailed) {
-      console.warn(`a test failed; ending browser session ${sessionId} so later worker processes in this slot launch their own`);
+      console.warn(`a test failed; ending browser session ${sessionId} for the runner to replace`);
       const cdp = await browser.newBrowserCDPSession();
       await cdp.send('Browser.close').catch(() => {});
     }

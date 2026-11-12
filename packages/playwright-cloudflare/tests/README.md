@@ -45,8 +45,9 @@ tests per isolate), but not a fresh browser: it acquires one Browser Run session
 the runner Worker's `/browser/v1/*`, lends them in `BROWSER_SESSION_IDS`, and
 closes them when Playwright exits; it waits until each new session accepts
 connections first. Each worker process connects to its slot's
-session and only disconnects at teardown; after a failure it ends the session, and
-later worker processes in that slot launch their own browser. A screenshot comparison can leave
+session and only disconnects at teardown. After a failure it ends the session,
+and `run.mjs`, which checks the sessions every few seconds, lends the slot a new
+one; isolates that start before then launch their own browser. A screenshot comparison can leave
 more than half an isolate's memory charged until it is collected, and a
 long-lived isolate need not collect before the next test. `--workers` must be a
 number, since it is the number of sessions.

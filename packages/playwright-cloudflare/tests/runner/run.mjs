@@ -12,8 +12,15 @@
 // to the worker processes in BROWSER_SESSION_IDS (src/runner/fixtures.ts), and
 // closes them once Playwright exits. Upstream exits the process itself when it
 // reports, so Playwright runs in a child process of this one.
+//
+// A slot whose session ends (a failing worker process ends it, or Browser Run
+// does) gets a new one: the child checks the sessions every few seconds and
+// updates BROWSER_SESSION_IDS, which reaches the next isolate of each worker
+// process. It records every session it lends in BROWSER_SESSIONS_FILE, and
+// this process closes them all.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +40,7 @@ const PLAYWRIGHT_CHILD = 'KITEBUILD_PLAYWRIGHT_CHILD';
 // Browser Run answers 429 or 503 while the account is at its browser limit,
 // for example while the previous run's sessions are still ending.
 const ACQUIRE_WAIT_MS = 5 * 60 * 1000;
+const SESSION_CHECK_MS = 5000;
 
 function fail(message) {
   process.stderr.write(`run: ${message}\n`);
@@ -49,6 +57,7 @@ const headers = {
 const args = process.argv.slice(2);
 
 if (process.env[PLAYWRIGHT_CHILD]) {
+  replaceEndedSessions();
   await runPlaywright({
     workerUrl,
     projectRoot: path.join(runnerDir, 'dist', 'node', 'project'),
@@ -68,6 +77,8 @@ if (process.env[PLAYWRIGHT_CHILD]) {
   }).catch(error => fail(error.message));
 } else {
   await waitForBuild();
+  const sessionsFile = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'browser-sessions-')), 'sessions');
+  fs.writeFileSync(sessionsFile, '');
   const sessionIds = [];
   let child;
   const forward = signal => child?.kill(signal);
@@ -79,7 +90,7 @@ if (process.env[PLAYWRIGHT_CHILD]) {
       sessionIds.push(await acquireSession());
     child = spawn(process.execPath, [fileURLToPath(import.meta.url), ...args], {
       stdio: 'inherit',
-      env: { ...process.env, [PLAYWRIGHT_CHILD]: '1', BROWSER_SESSION_IDS: sessionIds.join(',') },
+      env: { ...process.env, [PLAYWRIGHT_CHILD]: '1', BROWSER_SESSION_IDS: sessionIds.join(','), BROWSER_SESSIONS_FILE: sessionsFile },
     });
     code = await new Promise((resolve, reject) => {
       child.once('error', reject);
@@ -88,9 +99,37 @@ if (process.env[PLAYWRIGHT_CHILD]) {
   } catch (error) {
     process.stderr.write(`run: ${error.message}\n`);
   } finally {
-    await Promise.all(sessionIds.map(closeSession));
+    const replacements = fs.readFileSync(sessionsFile, 'utf8').split('\n').filter(Boolean);
+    await Promise.all([...new Set([...sessionIds, ...replacements])].map(closeSession));
+    fs.rmSync(path.dirname(sessionsFile), { recursive: true, force: true });
   }
   process.exit(code);
+}
+
+// In the Playwright child: gives a slot whose session has ended a new one.
+function replaceEndedSessions() {
+  let checking = false;
+  setInterval(async () => {
+    if (checking)
+      return;
+    checking = true;
+    try {
+      const sessionIds = process.env.BROWSER_SESSION_IDS.split(',');
+      for (const [slot, sessionId] of sessionIds.entries()) {
+        if (await isOpenSession(sessionId))
+          continue;
+        const replacement = await acquireSession();
+        fs.appendFileSync(process.env.BROWSER_SESSIONS_FILE, `${replacement}\n`);
+        sessionIds[slot] = replacement;
+        process.env.BROWSER_SESSION_IDS = sessionIds.join(',');
+        process.stderr.write(`run: browser session ${sessionId} ended; slot ${slot} now uses ${replacement}\n`);
+      }
+    } catch (error) {
+      process.stderr.write(`run: checking browser sessions: ${error.message}\n`);
+    } finally {
+      checking = false;
+    }
+  }, SESSION_CHECK_MS).unref();
 }
 
 // Until a few answers in a row come from this build with this token: for a
@@ -151,10 +190,29 @@ async function acquireSession() {
   return sessionId;
 }
 
-// A just-acquired session can take a moment to accept connections.
-async function waitForSession(sessionId) {
+function sessionUrl(sessionId) {
   const url = new URL(`/browser/v1/devtools/session/${sessionId}`, RUNNER_URL);
   url.searchParams.set('binding', BROWSER_BINDING);
+  return url;
+}
+
+// The details endpoint answers 404 for an unknown session, and also 200 for
+// one that has ended. Any other answer is checked again later.
+async function isOpenSession(sessionId) {
+  const response = await fetch(sessionUrl(sessionId), { headers, signal: AbortSignal.timeout(10_000) });
+  if (!response.ok) {
+    await response.body?.cancel();
+    if (response.status === 404)
+      return false;
+    throw new Error(`browser session ${sessionId} details answered ${response.status}`);
+  }
+  const { endTime, closeReason, closeReasonText } = await response.json();
+  return endTime === undefined && closeReason === undefined && closeReasonText === undefined;
+}
+
+// A just-acquired session can take a moment to accept connections.
+async function waitForSession(sessionId) {
+  const url = sessionUrl(sessionId);
   for (let attempt = 0; attempt < 10; attempt++) {
     const response = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
     await response.body?.cancel();
