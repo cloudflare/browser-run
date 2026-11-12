@@ -161,7 +161,15 @@ async function closeSession(sessionId) {
   url.protocol = url.protocol.replace('http', 'ws');
   await new Promise(resolve => {
     const socket = new WebSocket(url, { headers });
-    const timer = setTimeout(() => socket.close(), 15_000);
+    // A refused connection reports an error and may never report a close.
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      socket.close();
+      done();
+    }, 15_000);
     socket.addEventListener('open', () => socket.send(JSON.stringify({ id: 1, method: 'Browser.close', params: {} })));
     socket.addEventListener('message', ({ data }) => {
       if (JSON.parse(data).id === 1)
@@ -169,10 +177,8 @@ async function closeSession(sessionId) {
     });
     socket.addEventListener('error', () => {
       process.stderr.write(`run: could not close browser session ${sessionId}; it has ended already or ends when idle\n`);
+      done();
     });
-    socket.addEventListener('close', () => {
-      clearTimeout(timer);
-      resolve();
-    });
+    socket.addEventListener('close', done);
   });
 }
