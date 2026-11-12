@@ -168,7 +168,7 @@ async function closeSession(sessionId) {
         socket.close();
     });
     socket.addEventListener('error', () => {
-      process.stderr.write(`run: could not close browser session ${sessionId}; it ends when idle\n`);
+      process.stderr.write(`run: could not close browser session ${sessionId}; it has ended already or ends when idle\n`);
     });
     socket.addEventListener('close', () => {
       clearTimeout(timer);
