@@ -39,6 +39,16 @@ curl -N -X POST "$URL/run" -H "Authorization: Bearer $RUN_TOKEN" -d '{"args":["-
 `--project=smoke` runs `runner/smoke/` (one pass, one known-error skip, one
 deliberate failure; exit code 1); `--project=suite` runs the bundled specs.
 
+`runner/run.mjs` runs every test group in a fresh isolate (`groupsPerIsolate: 1`
+with the config's `fullyParallel`, so one isolate per independent test), but
+not a fresh browser: it acquires one Browser Run session per worker slot through
+the runner Worker's `/browser/v1/*`, lends them in `BROWSER_SESSION_IDS`, and
+closes them when Playwright exits. Each worker process connects to its slot's
+session and only disconnects at teardown. A screenshot comparison can leave
+more than half an isolate's memory charged until it is collected, and a
+long-lived isolate need not collect before the next test. `--workers` must be a
+number, since it is the number of sessions.
+
 ## Add Tests / Mark as skipped
 
 It's possible to add more playwright tests by editing `src/tests.ts` and import them there, ensuring they have a `../workerTests` prefix.

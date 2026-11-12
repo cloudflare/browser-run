@@ -25,6 +25,9 @@ export default defineConfig({
   // specs assert in call logs.
   expect: { timeout: 10000 },
   workers: 6,
+  // Each independent test is a group of its own, and runner/run.mjs gives
+  // every group a fresh isolate; serial groups stay whole.
+  fullyParallel: true,
   retries: 1,
   timeout: 60 * 1000,
   reporter: 'list',

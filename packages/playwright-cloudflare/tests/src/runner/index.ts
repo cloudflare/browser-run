@@ -3,7 +3,10 @@
 // its own, against Browser Run. Built by runner/build.mjs.
 //
 //   /worker: servePlaywrightWorker, with `Authorization: Bearer <RUN_TOKEN>`.
+//   /browser/v1/*: Browser Run, with the same token, for runner/run.mjs to
+//     acquire and close the sessions it lends to the worker processes.
 //   anything else: the test server's assets.
+import { forwardToBrowserRun } from '@cloudflare/browser-test-runtime/worker-routes';
 import { servePlaywrightWorker } from '@cloudflare/kitebuild-playwright-spec-runner';
 import { WorkerEntrypoint } from 'cloudflare:workers';
 
@@ -35,10 +38,18 @@ export class Outbound extends WorkerEntrypoint<RunnerEnv, { hosts: string[] }> {
 export default {
   async fetch(request: Request, env: RunnerEnv, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
-    if (url.pathname !== '/worker')
+    const browserRun = url.pathname.startsWith('/browser/v1/');
+    if (url.pathname !== '/worker' && !browserRun)
       return await serveAsset(request, env.ASSETS);
     if (!env.RUN_TOKEN || request.headers.get('Authorization') !== `Bearer ${env.RUN_TOKEN}`)
       return new Response('Unauthorized', { status: 401 });
+    if (browserRun) {
+      const binding = env[(url.searchParams.get('binding') ?? 'BROWSER') as BrowserBindingName];
+      if (!binding)
+        return new Response(`no Browser Run binding ${url.searchParams.get('binding')}`, { status: 400 });
+      url.pathname = url.pathname.slice('/browser'.length);
+      return await forwardToBrowserRun(new Request(url, request), binding);
+    }
     return servePlaywrightWorker(request, ctx, {
       ...project(url.origin),
       build: BUILD,

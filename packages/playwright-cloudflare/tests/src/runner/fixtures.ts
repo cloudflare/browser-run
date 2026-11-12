@@ -1,10 +1,11 @@
 // What specs get for `@playwright/test`, `pageTest`, `browserTest` and
 // `workerFixtures` under upstream Playwright Test (runner/build.mjs redirects
-// those imports here): workerFixtures.ts, with a browser launched per worker
-// process and the skip lists applied.
+// those imports here): workerFixtures.ts, with the browser session runner/run.mjs
+// lends each worker process and the skip lists applied.
 import path from 'path';
 
-import { chromium, launch } from '@cloudflare/playwright';
+import { isSessionGoneError } from '@cloudflare/browser-test-runtime/worker-routes';
+import { chromium, connect, launch } from '@cloudflare/playwright';
 
 import { test as base } from '../server/workerFixtures';
 import { skipErrorMessages, skipTests } from '../skipTests';
@@ -20,14 +21,28 @@ export const test = base.extend<{ _skipLists: void }>({
     await run((chromium as any)._playwright);
   }, { scope: 'worker' }],
 
-  browser: [async ({ binding }, run) => {
-    const browser = await launch(binding);
-    await run(browser);
-    await browser.close();
+  // runner/run.mjs owns one session per parallel worker slot. A worker
+  // process lives only as long as its isolate (one test group), so it connects
+  // to its slot's session and disconnects at teardown, leaving the browser for
+  // the next worker process in that slot.
+  sessionId: [async ({}, run, workerInfo) => {
+    const sessionId = process.env.BROWSER_SESSION_IDS?.split(',')[workerInfo.parallelIndex];
+    if (!sessionId)
+      throw new Error(`no browser session for parallel index ${workerInfo.parallelIndex}; runner/run.mjs lends them in BROWSER_SESSION_IDS`);
+    await run(sessionId);
   }, { scope: 'worker' }],
 
-  sessionId: [async ({ browser }, run) => {
-    await run(browser.sessionId());
+  // If Browser Run no longer serves the lent session, this worker process
+  // launches a browser of its own and closes it at teardown.
+  browser: [async ({ binding, sessionId }, run) => {
+    const browser = await connect(binding, sessionId).catch(async error => {
+      if (!isSessionGoneError(error.message))
+        throw error;
+      console.warn(`browser session ${sessionId} is gone; launching a browser for this worker process`);
+      return await launch(binding);
+    });
+    await run(browser);
+    await browser.close();
   }, { scope: 'worker' }],
 
   // Skips by full title, and turns a failure with a known error message into a

@@ -101,7 +101,8 @@ const internal = require.resolve('@cloudflare/playwright/internal');
 const vendoredImports = target => playwrightVendoredImports({ target, include: [path.join(playwrightDir, 'packages'), upstreamTestsDir] });
 const resolve = {
   alias: [
-    { find: '@cloudflare/browser-test-runtime', replacement: path.join(cloudflareTestsDir, 'runner/runtime.ts') },
+    // Only the package root: its dependency-free worker-routes subpath works as it is.
+    { find: /^@cloudflare\/browser-test-runtime$/, replacement: path.join(cloudflareTestsDir, 'runner/runtime.ts') },
     ...base.resolve.alias,
   ],
 };
