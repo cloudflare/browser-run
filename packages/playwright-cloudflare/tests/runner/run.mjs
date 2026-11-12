@@ -127,11 +127,22 @@ function browserUrl(pathname) {
   return url;
 }
 
+// Browser Run answers 429 or 503 while the account is at its browser limit,
+// for example while the previous run's sessions are still ending.
+const ACQUIRE_WAIT_MS = 5 * 60 * 1000;
+
 async function acquireSession() {
   const url = browserUrl('');
   url.searchParams.set('keep_alive', String(KEEP_ALIVE_MS));
-  const response = await fetch(url, { method: 'POST', headers, signal: AbortSignal.timeout(60_000) });
-  const body = await response.text();
+  let response, body;
+  for (const deadline = Date.now() + ACQUIRE_WAIT_MS; ;) {
+    response = await fetch(url, { method: 'POST', headers, signal: AbortSignal.timeout(60_000) });
+    body = await response.text();
+    if (![429, 503].includes(response.status) || Date.now() > deadline)
+      break;
+    process.stderr.write(`run: no browser available yet (${response.status}); retrying\n`);
+    await new Promise(resolve => setTimeout(resolve, 15_000));
+  }
   if (!response.ok)
     throw new Error(`acquiring a browser session answered ${response.status}: ${body.slice(0, 200)}`);
   const { sessionId } = JSON.parse(body);
