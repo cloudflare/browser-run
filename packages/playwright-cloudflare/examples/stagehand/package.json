@@ -13,13 +13,13 @@
     "deploy": "npm run build && wrangler deploy"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.13.4",
+    "@cloudflare/vite-plugin": "^1.67.0",
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.3",
     "typescript": "^5.8.3",
     "vite": "^7.3.6",
-    "wrangler": "^4.137.0"
+    "wrangler": "^4.156.1"
   },
   "dependencies": {
     "@browserbasehq/stagehand": "^2.5.0",
