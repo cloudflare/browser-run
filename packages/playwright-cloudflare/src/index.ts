@@ -50,9 +50,17 @@ const originalConnectOverCDP = playwright.chromium.connectOverCDP as (endpointUR
     : launch(wsUrl.toString());
 };
 
+function sessionPath(sessionId?: string): string {
+  if (!sessionId)
+    return '';
+  if (!/^[\w-]+$/.test(sessionId))
+    throw new Error(`Invalid session ID: ${sessionId}`);
+  return `/${sessionId}`;
+}
+
 async function connectDevtools(endpoint: BrowserEndpoint, options: { sessionId?: string, persistent?: boolean, browser?: string, guardrails?: SessionGuardrails }): Promise<WebSocket> {
   resetMonotonicTime();
-  const url = new URL(`${HTTP_FAKE_HOST}/v1/devtools/browser${options.sessionId ? `/${options.sessionId}` : ''}`);
+  const url = new URL(`${HTTP_FAKE_HOST}/v1/devtools/browser${sessionPath(options.sessionId)}`);
   if (options.persistent)
     url.searchParams.set('persistent', 'true');
   if (options.browser)
@@ -109,8 +117,7 @@ export function endpointURLString(binding: BrowserWorker | BrowserBindingKey, op
   if (!bindingKey || !(bindingKey in env))
     throw new Error(`No binding found for ${binding}`);
 
-  const sessionPath = options?.sessionId ? `/${options.sessionId}` : '';
-  const url = new URL(`${HTTP_FAKE_HOST}/v1/devtools/browser${sessionPath}`);
+  const url = new URL(`${HTTP_FAKE_HOST}/v1/devtools/browser${sessionPath(options?.sessionId)}`);
   url.searchParams.set('browser_binding', bindingKey);
   if (options?.browser)
     url.searchParams.set('browser', options.browser);

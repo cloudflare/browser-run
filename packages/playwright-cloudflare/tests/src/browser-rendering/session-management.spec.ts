@@ -310,6 +310,13 @@ test(`should create endpoint url`, async ({ binding }) => {
   expect(url4).toBe('http://fake.host/v1/devtools/browser?browser_binding=BROWSER&browser=kitesurf');
 });
 
+test(`should reject malformed session IDs`, async ({ binding }) => {
+  for (const sessionId of ['..', 'a/b', 'a?b']) {
+    await expect(connect({} as BrowserWorker, sessionId)).rejects.toThrow('Invalid session ID');
+    expect(() => endpointURLString(binding, { sessionId })).toThrow('Invalid session ID');
+  }
+});
+
 test(`should create browser with persistent context on playwright.chromium.connectOverCDP`, async ({ binding, playwright }) => {
   const url = endpointURLString(binding);
   const browser = await playwright.chromium.connectOverCDP(url);
