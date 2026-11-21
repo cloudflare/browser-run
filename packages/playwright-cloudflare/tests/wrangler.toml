@@ -13,7 +13,6 @@ rules = [
 
 routes = [
   { pattern = "playwright-test-workers.rendering.cfdata.org", custom_domain = true },
-  { pattern = "playwright-test-workers-cross-origin.rendering.cfdata.org", custom_domain = true },
 ]
 
 [browser]

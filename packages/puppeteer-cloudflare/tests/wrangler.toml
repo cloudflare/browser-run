@@ -7,7 +7,6 @@ upload_source_maps = true
 
 routes = [
   { pattern = "puppeteer-test-workers.rendering.cfdata.org", custom_domain = true },
-  { pattern = "puppeteer-test-workers-cross-origin.rendering.cfdata.org", custom_domain = true },
 ]
 
 [browser]
