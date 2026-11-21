@@ -1,5 +1,8 @@
 import {TestRunner} from '@cloudflare/browser-test-runtime';
-import {sessionUnusableResult} from '@cloudflare/browser-test-runtime/worker-routes';
+import {
+  sessionUnusableResult,
+  testServerPrefix,
+} from '@cloudflare/browser-test-runtime/worker-routes';
 import '@workerTests/index';
 import type { Browser, Page } from '@cloudflare/puppeteer';
 import puppeteer from '@cloudflare/puppeteer';
@@ -309,7 +312,7 @@ export class TestsServer extends DurableObject<Env> {
     const timeout =
       parseInt(url.searchParams.get('timeout') ?? '10', 10) * 1000;
     const {testId, fullTitle} = (await request.json()) as TestRequestPayload;
-    const assetsUrl = url.origin;
+    const assetsUrl = testServerPrefix(url);
     const routeId = this.ctx.id.toString();
     const {env} = this;
     const retry = parseInt(url.searchParams.get('retry') ?? '0', 10);
@@ -387,12 +390,12 @@ export class TestsServer extends DurableObject<Env> {
         page,
         puppeteer,
         server: new TestServer(
-          url.origin,
+          assetsUrl,
           'http',
           this.#testServerController,
         ),
         httpsServer: new TestServer(
-          url.origin,
+          assetsUrl,
           'http',
           this.#testServerController,
         ),

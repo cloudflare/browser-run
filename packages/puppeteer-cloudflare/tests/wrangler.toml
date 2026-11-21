@@ -14,6 +14,12 @@ routes = [
 binding = "BROWSER"
 remote = true
 
+# Browser Run sends the test server hostnames to this Worker through the
+# `outboundByHost` map of the session.
+[[services]]
+binding = "SELF"
+service = "puppeteer-test-workers"
+
 [assets]
 directory = "../../../submodules/puppeteer/test/assets"
 binding = "ASSETS"

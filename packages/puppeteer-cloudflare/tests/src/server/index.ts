@@ -3,9 +3,13 @@ import './underTest.js';
 
 import {testSuites} from '@cloudflare/browser-test-runtime';
 import {
+  acquireWithTestServerRoutes,
   forwardToBrowserRun,
+  isAcquireRequest,
+  isLocalDev,
   testListResponse,
 } from '@cloudflare/browser-test-runtime/worker-routes';
+import {acquire} from '@cloudflare/puppeteer';
 
 import type {TestsServer} from './testsServer.js';
 import {
@@ -21,6 +25,15 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
+    // The browser loads test pages from the test server hostnames, and Browser
+    // Run routes them back to this Worker.
+    if (isAcquireRequest(request) && !isLocalDev(url)) {
+      return await acquireWithTestServerRoutes(
+        acquire,
+        getBinding(url),
+        env.SELF,
+      );
+    }
     if (url.pathname.startsWith('/v1')) {
       return await forwardToBrowserRun(request, getBinding(url));
     }
