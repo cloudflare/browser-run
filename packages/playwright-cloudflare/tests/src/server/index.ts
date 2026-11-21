@@ -2,7 +2,14 @@
 import './underTest';
 
 import { testSuites } from '@cloudflare/browser-test-runtime';
-import { forwardToBrowserRun, testListResponse } from '@cloudflare/browser-test-runtime/worker-routes';
+import {
+  acquireWithTestServerRoutes,
+  forwardToBrowserRun,
+  isAcquireRequest,
+  isLocalDev,
+  testListResponse,
+} from '@cloudflare/browser-test-runtime/worker-routes';
+import { acquire } from '@cloudflare/playwright';
 
 import { getBinding } from '../utils';
 
@@ -11,6 +18,11 @@ export { TestsServer } from './testsServer';
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    // The browser loads test pages from the test server hostnames, and Browser
+    // Run routes them back to this Worker.
+    if (isAcquireRequest(request) && !isLocalDev(url))
+      return await acquireWithTestServerRoutes(acquire, getBinding(url), env.SELF);
 
     if (url.pathname.startsWith('/v1')) {
       console.log('Forwarding request to binding', url.pathname);

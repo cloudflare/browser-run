@@ -19,6 +19,12 @@ routes = [
 [browser]
 binding = "BROWSER"
 
+# Browser Run sends the test server hostnames to this Worker through the
+# `outboundByHost` map of the session.
+[[services]]
+binding = "SELF"
+service = "playwright-test-workers"
+
 [assets]
 directory = "../../../submodules/playwright/tests/assets"
 binding = "ASSETS"

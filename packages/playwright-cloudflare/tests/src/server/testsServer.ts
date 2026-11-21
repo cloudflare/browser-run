@@ -4,7 +4,7 @@ import {
   type TestInfoError,
   type TestResult,
 } from '@cloudflare/browser-test-runtime';
-import { isSessionGoneError } from '@cloudflare/browser-test-runtime/worker-routes';
+import { isSessionGoneError, testServerPrefix } from '@cloudflare/browser-test-runtime/worker-routes';
 import {isUnderTest} from '@cloudflare/playwright/internal';
 import { DurableObject } from 'cloudflare:workers';
 import '@workerTests/index';
@@ -55,9 +55,7 @@ export class TestsServer extends DurableObject<Env> {
 
     const timeout = parseInt(url.searchParams.get('timeout') ?? '10', 10) * 1000;
     const { testId, fullTitle, retry } = await request.json() as TestRequestPayload;
-    const assetsUrl = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
-      ? url.origin
-      : url.origin.replace(/^http:/, 'https:');
+    const assetsUrl = testServerPrefix(url);
     const { env } = this;
     const context = { env, sessionId, assetsUrl, retry, binding };
     const testRunner = new TestRunner(context, { timeout });
