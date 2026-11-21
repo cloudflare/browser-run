@@ -9,6 +9,65 @@ export function testListResponse(suites, env) {
   });
 }
 
+// The browser loads test pages from these hostnames. They have no DNS records:
+// Browser Run sends their requests to the test Worker through `outboundByHost`.
+// Outbound routing supports plain HTTP on the default port only. The two names
+// are different sites, so Chrome puts them in different processes.
+export const TEST_SERVER_HOST = 'test-server.test';
+export const CROSS_PROCESS_HOST = 'cross-process.test';
+export const TEST_SERVER_PREFIX = `http://${TEST_SERVER_HOST}`;
+export const CROSS_PROCESS_PREFIX = `http://${CROSS_PROCESS_HOST}`;
+
+// The `outboundByHost` map that routes both test server hostnames to `fetcher`.
+export function testServerOutboundByHost(fetcher) {
+  return {
+    [TEST_SERVER_HOST]: fetcher,
+    [CROSS_PROCESS_HOST]: fetcher,
+  };
+}
+
+// True when the Worker runs under local `wrangler dev`. Outbound routing needs
+// a deployed Worker, so local runs keep serving test pages from the request
+// origin.
+export function isLocalDev(url) {
+  const { hostname } = new URL(url);
+  return hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]';
+}
+
+// `server.PREFIX` for a test request that arrived at `url`.
+export function testServerPrefix(url) {
+  return isLocalDev(url) ? new URL(url).origin : TEST_SERVER_PREFIX;
+}
+
+// `server.CROSS_PROCESS_PREFIX` for a `server.PREFIX`. Local dev has a single
+// origin, so it uses the same prefix.
+export function crossProcessPrefix(prefix) {
+  return prefix === TEST_SERVER_PREFIX ? CROSS_PROCESS_PREFIX : prefix;
+}
+
+// True for the acquire request (`POST /v1/devtools/browser`) of the Node test
+// runner.
+export function isAcquireRequest(request) {
+  return request.method === 'POST' && new URL(request.url).pathname === '/v1/devtools/browser';
+}
+
+// Acquires a Browser Run session whose test server hostnames route to
+// `fetcher`, and responds like the forwarded acquire request: `{ sessionId }`.
+// `acquire` is the library function, for example `acquire` from
+// `@cloudflare/playwright`.
+export async function acquireWithTestServerRoutes(acquire, binding, fetcher) {
+  try {
+    const { sessionId } = await acquire(binding, { outboundByHost: testServerOutboundByHost(fetcher) });
+    return Response.json({ sessionId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(`Unable to acquire a Browser Run session: ${message}`, { status: 502 });
+  }
+}
+
 // Forwards a `/v1/*` request from the Node test runner to the Browser Run
 // binding. The binding ignores the host, and `binding` only selects it here.
 export function forwardToBrowserRun(request, binding) {
