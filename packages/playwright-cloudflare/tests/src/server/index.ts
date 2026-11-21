@@ -38,7 +38,7 @@ export default {
 
     const bindingName = url.searchParams.get('binding') ?? 'BROWSER';
 
-    if (/\.(spec|test)\.ts$/.test(url.pathname)) {
+    if (url.pathname.startsWith('/bundle/') && /\.(spec|test)\.ts$/.test(url.pathname)) {
       const sessionId = url.searchParams.get('sessionId');
       if (!sessionId)
         return new Response('sessionId is required', { status: 400 });

@@ -334,6 +334,14 @@ test(`should connect HTTP-acquired sessions through fetch, not connectSession`, 
   await connectedBrowser.close();
 });
 
+test(`should reject malformed session IDs`, async () => {
+  for (const sessionId of ['..', 'a/b', 'a?b']) {
+    await expect(connect({} as BrowserWorker, sessionId)).rejects.toThrow(
+      'Invalid session ID',
+    );
+  }
+});
+
 test(`should keep session open when closing browser created with connect`, async () => {
   const {sessionId} = await acquire(env.BROWSER, {keep_alive: 10000});
 
