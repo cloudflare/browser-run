@@ -179,6 +179,10 @@ export const skipTests: string[] = [
   // server.waitForRequest skips the test while page.waitForEvent('worker') is still pending. The
   // pending wait then rejects during teardown and fails the test.
   'page/workers.spec.ts > should support extra http headers',
+  // The two test server hostnames are different sites. Browser Run keeps
+  // third-party storage partitioning on, so third-party localStorage is empty.
+  'library/browsercontext-storage-state.spec.ts > should set local storage in third-party context',
+  'library/browsercontext-storage-state.spec.ts > should roundtrip local storage in third-party context',
 ];
 
 export const skipErrorMessages: Array<string | RegExp> = [
@@ -189,7 +193,6 @@ export const skipErrorMessages: Array<string | RegExp> = [
   'createHttp2Server is not defined',
   /\[unenv\] .* is not implemented yet!/,
   /Received string:\s+"Cloudflare-Workers"/,
-  '.rendering.cfdata.org',
   /expect\w+ is not a function/,
   'Error: Agent not implemented',
   // node:vm execution contexts are not available in Cloudflare Workers.

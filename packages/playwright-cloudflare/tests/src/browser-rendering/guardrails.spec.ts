@@ -2,6 +2,10 @@ import { launch, acquire, sessions } from '@cloudflare/playwright';
 
 import { test, expect } from '../server/workerFixtures';
 
+// These tests load `server.EMPTY_PAGE` from the test assets Worker over HTTPS
+// (see `httpsTests.ts`). The control host of the test Worker is in the same zone.
+const GUARDRAILS_BLOCKED_URL = 'https://playwright-test-workers.rendering.cfdata.org/';
+
 test(`should allow navigation to an allowed domain and block everything else @smoke`, async ({ binding, server }) => {
   const browser = await launch(binding, { guardrails: { allowedDomains: [server.HOSTNAME] } });
   try {
@@ -11,7 +15,7 @@ test(`should allow navigation to an allowed domain and block everything else @sm
     expect(allowed!.status()).toBe(200);
 
     // Same zone, different hostname: the exact pattern above does not match it.
-    const blocked = await page.goto(`${server.CROSS_PROCESS_PREFIX}/empty.html`);
+    const blocked = await page.goto(GUARDRAILS_BLOCKED_URL);
     expect(blocked!.status()).toBe(403);
     expect(blocked!.headers()['cf-mitigated']).toBe('guardrails');
   } finally {
