@@ -17,6 +17,18 @@ export declare const CROSS_PROCESS_PREFIX: 'http://cross-process.test';
 /** The `outboundByHost` map that routes both test server hostnames to `fetcher`. */
 export declare function testServerOutboundByHost<T>(fetcher: T): Record<string, T>;
 
+/** `server.PREFIX` of the tests that need a secure context. */
+export declare const TEST_ASSETS_HTTPS_PREFIX: 'https://browser-run-test-assets.rendering.cfdata.org';
+
+/** Serves the upstream Playwright test assets like the upstream test server. */
+export declare function serveTestAsset(
+  request: Request,
+  assets: { fetch(request: Request): Promise<Response> } | undefined,
+): Promise<Response>;
+
+/** Sends the global `fetch` calls for the test server hostnames to `fetcher`. */
+export declare function routeTestServerFetches(fetcher: { fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> }): void;
+
 /** True when the Worker runs under local `wrangler dev`. */
 export declare function isLocalDev(url: string | URL): boolean;
 
