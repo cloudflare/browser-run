@@ -33,10 +33,10 @@
     "test:generate:worker": "node ../../scripts/with-patch.mjs playwright npm run test:generate:worker:patched",
     "test:generate:worker:patched": "node ./utils/generate_worker_tests.js && cd tests && npx vite build",
     "test:prepare:built": "npm run test:generate:worker && npm run ci:tests",
-    "test:bundle": "npm run test:prepare:built && cd tests && npx wrangler deploy --dry-run",
+    "test:bundle": "npm run test:prepare:built && cd tests && npx wrangler deploy --dry-run --config ../../browser-test-runtime/assets-worker/wrangler.toml && npx wrangler deploy --dry-run",
     "test:pack": "node ../../scripts/verify-packed-playwright.mjs",
     "test:generate:proxy": "node ./utils/generate_proxy_tests.js",
-    "test:deploy": "npm run test:prepare:built && cd tests && npx wrangler deploy",
+    "test:deploy": "npm run test:prepare:built && cd tests && npx wrangler deploy --config ../../browser-test-runtime/assets-worker/wrangler.toml && npx wrangler deploy",
     "test:dev": "npm run test:generate:worker && npm run ci:tests && cd tests && npx wrangler dev",
     "test:full": "npm run test:generate:proxy && cd tests && npx playwright test",
     "test:smoke": "npm run test:generate:proxy && cd tests && npx playwright test --grep \"@smoke\""

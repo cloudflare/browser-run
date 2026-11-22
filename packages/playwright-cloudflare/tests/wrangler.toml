@@ -18,11 +18,12 @@ routes = [
 [browser]
 binding = "BROWSER"
 
-# Browser Run sends the test server hostnames to this Worker through the
-# `outboundByHost` map of the session.
+# Browser Run sends the test server hostnames to the test assets Worker
+# (`packages/browser-test-runtime/assets-worker`) through the `outboundByHost`
+# map of the session. Deploy the test assets Worker first.
 [[services]]
-binding = "SELF"
-service = "playwright-test-workers"
+binding = "TEST_ASSETS"
+service = "browser-run-test-assets"
 
 [assets]
 directory = "../../../submodules/playwright/tests/assets"
