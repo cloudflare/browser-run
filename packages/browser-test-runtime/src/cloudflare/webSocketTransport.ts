@@ -1,5 +1,7 @@
 import {AsyncLocalStorage} from 'async_hooks';
 
+import {debugLogger} from '@utils/debugLogger';
+
 import type {
   ConnectionTransport,
   ProtocolRequest,
@@ -10,6 +12,7 @@ export const transportZone = new AsyncLocalStorage<WebSocketTransport>();
 
 export class WebSocketTransport implements ConnectionTransport {
   private readonly ws: WebSocket;
+  private closing = false;
   onmessage?: (message: ProtocolResponse) => void;
   onclose?: () => void;
   readonly sessionId: string | undefined;
@@ -28,20 +31,32 @@ export class WebSocketTransport implements ConnectionTransport {
     this.ws.addEventListener('message', event => {
       this.onmessage?.(JSON.parse(event.data) as ProtocolResponse);
     });
-    this.ws.addEventListener('close', () => this.onclose?.());
+    this.ws.addEventListener('close', () => {
+      this.closing = true;
+      this.onclose?.();
+    });
     this.ws.addEventListener('error', error => {
-      console.error(
-        `Websocket error${sessionId ? `: SessionID: ${sessionId}` : ''}`,
-        error,
+      // workerd fires an error when Browser Run drops the socket after Browser.close
+      if (this.closing) {
+        return;
+      }
+      const message = (error as ErrorEvent).message || 'unknown error';
+      debugLogger.log(
+        'error',
+        `Websocket error${sessionId ? `: SessionID: ${sessionId}` : ''}: ${message}`,
       );
     });
   }
 
   send(message: ProtocolRequest): void {
+    if (message.method === 'Browser.close') {
+      this.closing = true;
+    }
     this.ws.send(JSON.stringify(message));
   }
 
   close(): void {
+    this.closing = true;
     this.ws.close();
     this.onclose?.();
   }
