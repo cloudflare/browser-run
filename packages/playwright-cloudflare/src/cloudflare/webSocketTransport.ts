@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'async_hooks';
+import { debugLogger } from '@utils/debugLogger';
 
 import type { ConnectionTransport, ProtocolRequest, ProtocolResponse } from 'playwright-core/lib/server/transport';
 
@@ -7,6 +8,7 @@ export const transportZone = new AsyncLocalStorage<WebSocketTransport>();
 
 export class WebSocketTransport implements ConnectionTransport {
   private _ws: WebSocket;
+  private _closing = false;
   onmessage?: (message: ProtocolResponse) => void;
   onclose?: () => void;
   readonly sessionId: string | undefined;
@@ -26,19 +28,26 @@ export class WebSocketTransport implements ConnectionTransport {
       this.onmessage?.(JSON.parse(event.data) as ProtocolResponse);
     });
     this._ws.addEventListener('close', () => {
+      this._closing = true;
       this.onclose?.();
     });
     this._ws.addEventListener('error', e => {
-      // eslint-disable-next-line no-console
-      console.error(`Websocket error${sessionId ? `: SessionID: ${sessionId}` : ''}`, e);
+      // workerd fires an error when Browser Run drops the socket after Browser.close
+      if (this._closing)
+        return;
+      const message = (e as ErrorEvent).message || 'unknown error';
+      debugLogger.log('error', `Websocket error${sessionId ? `: SessionID: ${sessionId}` : ''}: ${message}`);
     });
   }
 
   send(message: ProtocolRequest): void {
+    if (message.method === 'Browser.close')
+      this._closing = true;
     this._ws.send(JSON.stringify(message));
   }
 
   close(): void {
+    this._closing = true;
     this._ws.close();
     this.onclose?.();
   }
