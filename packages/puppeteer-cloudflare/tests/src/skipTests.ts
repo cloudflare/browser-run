@@ -174,4 +174,12 @@ export const skipTests: string[] = [
     // Page.startScreenRecording is not available before Chrome 153. This matches
     // Puppeteer's own TestExpectations.json.
     "page.test.ts > Page > Page.record > should record page",
+
+    // TODO: Run these tests again when Browser Run outbound Workers support
+    // HTTPS. Test pages load from http://test-server.test, which is not a
+    // secure context. Chrome does not store Secure cookies or expose
+    // navigator.userAgentData on it. These tests also use the test server
+    // routes, so they cannot run on the test assets Worker (see httpsTests.ts).
+    "browser-rendering/test-server.spec.ts > Worker TestServer > serves routes and observes requests",
+    "page.test.ts > Page > Page.setUserAgent > should work with additional userAgentMetdata",
 ];

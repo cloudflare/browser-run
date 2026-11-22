@@ -1,6 +1,7 @@
 import {TestRunner} from '@cloudflare/browser-test-runtime';
 import {
   sessionUnusableResult,
+  TEST_ASSETS_HTTPS_PREFIX,
   testServerPrefix,
 } from '@cloudflare/browser-test-runtime/worker-routes';
 import '@workerTests/index';
@@ -8,6 +9,7 @@ import type { Browser, Page } from '@cloudflare/puppeteer';
 import puppeteer from '@cloudflare/puppeteer';
 import {DurableObject} from 'cloudflare:workers';
 
+import {httpsTests} from '../httpsTests.js';
 import {skipTests} from '../skipTests.js';
 
 import {
@@ -35,6 +37,7 @@ export interface TestRequestPayload {
 const log = console.log.bind(console);
 
 const skipTestsFullTitles = new Set(skipTests);
+const httpsTestsFullTitles = new Set(httpsTests);
 
 // The zone serving the test Worker sets its Bot Management cookie on every
 // response. Upstream cookie specs expect only the cookies they create.
@@ -312,7 +315,9 @@ export class TestsServer extends DurableObject<Env> {
     const timeout =
       parseInt(url.searchParams.get('timeout') ?? '10', 10) * 1000;
     const {testId, fullTitle} = (await request.json()) as TestRequestPayload;
-    const assetsUrl = testServerPrefix(url);
+    const assetsUrl = httpsTestsFullTitles.has(fullTitle)
+      ? TEST_ASSETS_HTTPS_PREFIX
+      : testServerPrefix(url);
     const routeId = this.ctx.id.toString();
     const {env} = this;
     const retry = parseInt(url.searchParams.get('retry') ?? '0', 10);
