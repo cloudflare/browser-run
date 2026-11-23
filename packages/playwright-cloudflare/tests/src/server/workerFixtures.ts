@@ -7,6 +7,7 @@ import {
   mergeTests,
   runWithExpectApiListener,
 } from '@cloudflare/browser-test-runtime';
+import { crossProcessPrefix } from '@cloudflare/browser-test-runtime/worker-routes';
 import playwright, { connect } from '@cloudflare/playwright';
 import { env } from 'cloudflare:workers';
 
@@ -81,7 +82,7 @@ class TestServer {
   constructor(testInfo: TestInfo, assetsUrl: string) {
     this._testInfo = testInfo;
     this.PREFIX = assetsUrl;
-    this.CROSS_PROCESS_PREFIX = this.PREFIX.replace(/\:\/\/([^.]+)\./, '://$1-cross-origin.');
+    this.CROSS_PROCESS_PREFIX = crossProcessPrefix(this.PREFIX);
     this.EMPTY_PAGE = `${this.PREFIX}/empty.html`;
     this.HELLO_WORLD = `${this.PREFIX}/hello-world`;
     this.HOSTNAME = new URL(this.PREFIX).hostname;

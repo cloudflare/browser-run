@@ -4,11 +4,12 @@ import {
   type TestInfoError,
   type TestResult,
 } from '@cloudflare/browser-test-runtime';
-import { isSessionGoneError } from '@cloudflare/browser-test-runtime/worker-routes';
+import { isSessionGoneError, TEST_ASSETS_HTTPS_PREFIX, testServerPrefix } from '@cloudflare/browser-test-runtime/worker-routes';
 import {isUnderTest} from '@cloudflare/playwright/internal';
 import { DurableObject } from 'cloudflare:workers';
 import '@workerTests/index';
 
+import { httpsTests } from '../httpsTests';
 import { skipTests, skipErrorMessages } from '../skipTests';
 import { BrowserBindingName } from '../utils';
 
@@ -23,6 +24,7 @@ export type TestRequestPayload = {
 const log = console.log.bind(console);
 
 const skipTestsFullTitles = new Set(skipTests);
+const httpsTestsFullTitles = new Set(httpsTests);
 
 function formatError(error: TestInfoError | Error | string) {
   if (typeof error === 'string')
@@ -55,9 +57,7 @@ export class TestsServer extends DurableObject<Env> {
 
     const timeout = parseInt(url.searchParams.get('timeout') ?? '10', 10) * 1000;
     const { testId, fullTitle, retry } = await request.json() as TestRequestPayload;
-    const assetsUrl = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
-      ? url.origin
-      : url.origin.replace(/^http:/, 'https:');
+    const assetsUrl = httpsTestsFullTitles.has(fullTitle) ? TEST_ASSETS_HTTPS_PREFIX : testServerPrefix(url);
     const { env } = this;
     const context = { env, sessionId, assetsUrl, retry, binding };
     const testRunner = new TestRunner(context, { timeout });

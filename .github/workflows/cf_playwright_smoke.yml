@@ -10,7 +10,14 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The test Worker binds to the test assets Worker, and the tests open it
+  # over HTTPS, so it must be deployed first.
+  deploy-test-assets:
+    uses: ./.github/workflows/cf_test_assets_deploy.yml
+    secrets: inherit
+
   test_smoke:
+    needs: deploy-test-assets
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

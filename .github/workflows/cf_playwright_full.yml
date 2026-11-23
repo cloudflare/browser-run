@@ -43,7 +43,17 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The test Worker binds to the test assets Worker, and the tests open it
+  # over HTTPS, so it must be deployed first.
+  deploy-test-assets:
+    uses: ./.github/workflows/cf_test_assets_deploy.yml
+    secrets: inherit
+    # Fork and Dependabot PRs have no access to the secrets.
+    with:
+      deploy: ${{ github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]') }}
+
   full-tests:
+    needs: deploy-test-assets
     runs-on: ubuntu-latest
     # All branches deploy to the same test Worker, so only one job may use it at
     # a time. Shared with the smoke workflow, which uses the same group name.

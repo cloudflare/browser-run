@@ -7,12 +7,17 @@ upload_source_maps = true
 
 routes = [
   { pattern = "puppeteer-test-workers.rendering.cfdata.org", custom_domain = true },
-  { pattern = "puppeteer-test-workers-cross-origin.rendering.cfdata.org", custom_domain = true },
 ]
 
 [browser]
 binding = "BROWSER"
 remote = true
+
+# Browser Run sends the test server hostnames to this Worker through the
+# `outboundByHost` map of the session.
+[[services]]
+binding = "SELF"
+service = "puppeteer-test-workers"
 
 [assets]
 directory = "../../../submodules/puppeteer/test/assets"

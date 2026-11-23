@@ -1,0 +1,24 @@
+# Serves the upstream Playwright test assets to the browser.
+# - The Playwright test Worker routes the test server hostnames
+#   (`http://*.test`) here through `outboundByHost`.
+# - Tests of both suites that need a secure context open the custom domain over
+#   HTTPS (`TEST_ASSETS_HTTPS_PREFIX`).
+# It has no test routes and no Browser Run binding, so it can stay public.
+# Deploy it before the Playwright test Worker, which binds to it.
+name = "browser-run-test-assets"
+main = "index.js"
+workers_dev = false
+compatibility_date = "2026-04-04"
+upload_source_maps = true
+
+routes = [
+  { pattern = "browser-run-test-assets.rendering.cfdata.org", custom_domain = true },
+]
+
+[assets]
+directory = "../../../submodules/playwright/tests/assets"
+binding = "ASSETS"
+run_worker_first = true
+
+[observability]
+enabled = true

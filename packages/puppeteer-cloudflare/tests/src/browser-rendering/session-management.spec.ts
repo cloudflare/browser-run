@@ -1,4 +1,12 @@
 import {
+  acquireWithTestServerRoutes,
+  crossProcessPrefix,
+  CROSS_PROCESS_HOST,
+  CROSS_PROCESS_PREFIX,
+  TEST_SERVER_HOST,
+  TEST_SERVER_PREFIX,
+} from '@cloudflare/browser-test-runtime/worker-routes';
+import {
   launch,
   connect,
   sessions,
@@ -151,6 +159,41 @@ test(`should pass lab and outbound workers to the RPC acquire method`, async () 
     lab: true,
     outboundByHost: {'app.example.com': outboundWorker},
   });
+});
+
+test(`should route the test server hostnames to the outbound Worker`, async () => {
+  let received: unknown;
+  const outboundWorker = {
+    fetch: async () => {
+      return new Response('ok');
+    },
+  } as unknown as Fetcher;
+  const rpcBinding = {
+    fetch: async () => {
+      return new Response('ok');
+    },
+    connectSession: async () => {
+      throw new Error('not called');
+    },
+    acquire: async (options: unknown) => {
+      received = options;
+      return {sessionId: 'session'};
+    },
+  } as BrowserWorker;
+
+  const response = await acquireWithTestServerRoutes(
+    acquire,
+    rpcBinding,
+    outboundWorker,
+  );
+  expect(await response.json()).toEqual({sessionId: 'session'});
+  expect(received).toEqual({
+    outboundByHost: {
+      [TEST_SERVER_HOST]: outboundWorker,
+      [CROSS_PROCESS_HOST]: outboundWorker,
+    },
+  });
+  expect(crossProcessPrefix(TEST_SERVER_PREFIX)).toBe(CROSS_PROCESS_PREFIX);
 });
 
 test(`should translate keep_alive for RPC acquire`, async () => {

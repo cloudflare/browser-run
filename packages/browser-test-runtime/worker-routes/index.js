@@ -9,6 +9,121 @@ export function testListResponse(suites, env) {
   });
 }
 
+// The browser loads test pages from these hostnames. They have no DNS records:
+// Browser Run sends their requests to the test Worker through `outboundByHost`.
+// Outbound routing supports plain HTTP on the default port only. The two names
+// are different sites, so Chrome puts them in different processes.
+export const TEST_SERVER_HOST = 'test-server.test';
+export const CROSS_PROCESS_HOST = 'cross-process.test';
+export const TEST_SERVER_PREFIX = `http://${TEST_SERVER_HOST}`;
+export const CROSS_PROCESS_PREFIX = `http://${CROSS_PROCESS_HOST}`;
+
+// The `outboundByHost` map that routes both test server hostnames to `fetcher`.
+export function testServerOutboundByHost(fetcher) {
+  return {
+    [TEST_SERVER_HOST]: fetcher,
+    [CROSS_PROCESS_HOST]: fetcher,
+  };
+}
+
+// The test assets Worker (`assets-worker`). Tests that need a secure context
+// load their pages from it over HTTPS. The browser can open it without
+// credentials.
+export const TEST_ASSETS_HTTPS_PREFIX = 'https://browser-run-test-assets.rendering.cfdata.org';
+
+// Serves the upstream Playwright test assets like the upstream test server.
+export async function serveTestAsset(request, assets) {
+  const url = new URL(request.url);
+
+  if (url.pathname === '/hello-world') {
+    return new Response('<title>Hello</title>Hello world', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    });
+  }
+
+  if (url.pathname === '/' || url.pathname === '/index.html')
+    // let's use empty.html for index.html
+    request = new Request(new URL('/empty', url));
+  else if (url.pathname.endsWith('.html'))
+    // assets serve html files without .html extension
+    request = new Request(request.url.substring(0, request.url.length - '.html'.length));
+
+  let response = await assets?.fetch(request);
+  if (!response)
+    return new Response('Not found', { status: 404 });
+  // Like the upstream test server, give missing files a body. Chromium shows
+  // its own error page instead of an empty 4xx response.
+  if (response.status === 404 && request.method !== 'HEAD')
+    response = new Response(`File not found: ${new URL(request.url).pathname}`, { status: 404, headers: { 'Content-Type': 'text/plain' } });
+
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-cache, no-store');
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
+function isTestServerUrl(url) {
+  return url.protocol === 'http:' && (url.hostname === TEST_SERVER_HOST || url.hostname === CROSS_PROCESS_HOST);
+}
+
+// Sends the requests of the Worker itself (for example `route.fetch()` and
+// `APIRequestContext` in Playwright) for the test server hostnames to
+// `fetcher`. These hostnames have no DNS records, and `outboundByHost` routes
+// only the requests of the browser. `node:http` in workerd calls the global
+// `fetch`, so this also covers it.
+export function routeTestServerFetches(fetcher) {
+  const fetch = globalThis.fetch;
+  globalThis.fetch = (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : input);
+    return isTestServerUrl(url) ? fetcher.fetch(input, init) : fetch(input, init);
+  };
+}
+
+// True when the Worker runs under local `wrangler dev`. Outbound routing needs
+// a deployed Worker, so local runs keep serving test pages from the request
+// origin.
+export function isLocalDev(url) {
+  const { hostname } = new URL(url);
+  return hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '127.0.0.1' ||
+    hostname === '[::1]';
+}
+
+// `server.PREFIX` for a test request that arrived at `url`.
+export function testServerPrefix(url) {
+  return isLocalDev(url) ? new URL(url).origin : TEST_SERVER_PREFIX;
+}
+
+// `server.CROSS_PROCESS_PREFIX` for a `server.PREFIX`. Local dev has a single
+// origin, so it uses the same prefix.
+export function crossProcessPrefix(prefix) {
+  return prefix === TEST_SERVER_PREFIX ? CROSS_PROCESS_PREFIX : prefix;
+}
+
+// True for the acquire request (`POST /v1/devtools/browser`) of the Node test
+// runner.
+export function isAcquireRequest(request) {
+  return request.method === 'POST' && new URL(request.url).pathname === '/v1/devtools/browser';
+}
+
+// Acquires a Browser Run session whose test server hostnames route to
+// `fetcher`, and responds like the forwarded acquire request: `{ sessionId }`.
+// `acquire` is the library function, for example `acquire` from
+// `@cloudflare/playwright`.
+export async function acquireWithTestServerRoutes(acquire, binding, fetcher) {
+  try {
+    const { sessionId } = await acquire(binding, { outboundByHost: testServerOutboundByHost(fetcher) });
+    return Response.json({ sessionId });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return new Response(`Unable to acquire a Browser Run session: ${message}`, { status: 502 });
+  }
+}
+
 // Forwards a `/v1/*` request from the Node test runner to the Browser Run
 // binding. The binding ignores the host, and `binding` only selects it here.
 export function forwardToBrowserRun(request, binding) {

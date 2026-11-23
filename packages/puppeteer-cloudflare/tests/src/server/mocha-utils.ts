@@ -1,3 +1,4 @@
+import {crossProcessPrefix} from '@cloudflare/browser-test-runtime/worker-routes';
 import puppeteer from '@cloudflare/puppeteer';
 import type {Browser, BrowserContext, Cookie, Page} from '@cloudflare/puppeteer';
 import expect from 'expect';
@@ -54,10 +55,7 @@ export class TestServer {
     this.#controller = controller;
     this.#server = server;
     this.PREFIX = assetsUrl;
-    this.CROSS_PROCESS_PREFIX = this.PREFIX.replace(
-      /\:\/\/([^.]+)\./,
-      '://$1-cross-origin.',
-    );
+    this.CROSS_PROCESS_PREFIX = crossProcessPrefix(this.PREFIX);
     this.EMPTY_PAGE = `${assetsUrl}/empty.html`;
   }
 

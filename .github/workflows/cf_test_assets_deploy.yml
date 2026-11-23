@@ -1,0 +1,42 @@
+name: "Test assets Worker - Deploy"
+permissions:
+  contents: read
+
+# The Playwright and Puppeteer test workflows call this workflow before they
+# deploy their test Workers. The Playwright test Worker binds to the test assets
+# Worker, and both suites open it over HTTPS.
+on:
+  workflow_call:
+    inputs:
+      deploy:
+        description: 'Deploy the Worker. When false, the job only succeeds, so that the callers that need it can still run.'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # All branches and both suites deploy to the same Worker. The deploy takes
+    # seconds, so this group does not block the test runs.
+    concurrency:
+      group: cf-test-assets-deployment
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        if: ${{ inputs.deploy }}
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.deploy }}
+        with:
+          node-version: '22.x'
+
+      - name: Deploy test assets Worker
+        if: ${{ inputs.deploy }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm ci
+          git submodule update --init submodules/playwright
+          cd packages/browser-test-runtime
+          npx wrangler deploy --config assets-worker/wrangler.toml
