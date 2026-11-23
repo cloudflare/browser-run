@@ -179,6 +179,10 @@ export const skipTests: string[] = [
   // server.waitForRequest skips the test while page.waitForEvent('worker') is still pending. The
   // pending wait then rejects during teardown and fails the test.
   'page/workers.spec.ts > should support extra http headers',
+  // The test compares Date.now() in the Worker with the console timestamp from the browser
+  // clock. Date.now() in the Worker does not advance while the test waits for CDP messages, so
+  // the timestamp is later than the "after" value.
+  'page/workers.spec.ts > should have timestamp on worker console messages',
   // The two test server hostnames are different sites. Browser Run keeps
   // third-party storage partitioning on, so third-party localStorage is empty.
   'library/browsercontext-storage-state.spec.ts > should set local storage in third-party context',
