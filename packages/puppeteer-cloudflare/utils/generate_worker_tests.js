@@ -127,6 +127,38 @@ function tracingTempDirectoryPlugin() {
   };
 }
 
+// Browser Run accepts DOM.setFileInputFiles paths only under its download
+// directory. The files don't need to exist: these tests only check the name,
+// type and events of the File that the page gets.
+function uploadDirectoryPlugin() {
+  const downloadDir = '/tmp/browser-run-downloads';
+  return {
+    name: 'upload-directory',
+    enforce: 'pre',
+    transform(code, id) {
+      if (!id.endsWith('/input.test.ts')) {
+        return;
+      }
+      // Fail the build if upstream changes this text. Otherwise the tests
+      // fail at run time with a protocol error that doesn't point here.
+      const rewrite = (src, from, to) => {
+        const out = src.replaceAll(from, to);
+        if (out === src) {
+          throw new Error(`upload-directory: ${JSON.stringify(from)} not found in ${id}`);
+        }
+        return out;
+      };
+      code = rewrite(
+        code,
+        "const FILE_TO_UPLOAD = path.join(\n  import.meta.dirname,\n  '/../assets/file-to-upload.txt',\n);",
+        `const FILE_TO_UPLOAD = '${downloadDir}/file-to-upload.txt';`,
+      );
+      code = rewrite(code, 'path.relative(process.cwd(), FILE_TO_UPLOAD)', 'FILE_TO_UPLOAD');
+      return rewrite(code, "'file-does-not-exist.txt'", `'${downloadDir}/file-does-not-exist.txt'`);
+    },
+  };
+}
+
 function remoteTestServerPlugin() {
   return {
     name: 'remote-test-server',
@@ -211,6 +243,7 @@ ${[...testFiles, ...cloudflareTestFiles]
     plugins: [
       setTestFilePlugin(),
       tracingTempDirectoryPlugin(),
+      uploadDirectoryPlugin(),
       remoteTestServerPlugin(),
     ],
     root: sourceTestsDir,
