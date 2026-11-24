@@ -11,6 +11,7 @@ import {Puppeteer} from 'puppeteer-core/lib/common/Puppeteer.js';
 
 import type {BrowserWorker} from './BrowserWorker.js';
 import {
+  assertValidSessionId,
   connectToCDPBrowser,
   type Browsers,
   type Locations,
@@ -250,6 +251,9 @@ export class PuppeteerWorkers extends Puppeteer {
     const connectOptions = endpoint as ConnectOptions;
     if (!sessionId && !browser && connectOptions.protocol === 'webDriverBiDi') {
       throw new Error('Cloudflare Browser Run supports the CDP protocol only');
+    }
+    if (sessionId) {
+      assertValidSessionId(sessionId);
     }
     try {
       if (!sessionId && !browser) {

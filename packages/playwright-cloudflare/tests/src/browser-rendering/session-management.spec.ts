@@ -317,6 +317,22 @@ test(`should reject malformed session IDs`, async ({ binding }) => {
   }
 });
 
+test(`should reject malformed session IDs before connectSession`, async () => {
+  let connectSessionCalls = 0;
+  const rpcBinding = {
+    fetch: async () => new Response('ok'),
+    acquire: async () => ({ sessionId: 'session' }),
+    connectSession: async () => {
+      connectSessionCalls++;
+      throw new Error('connectSession must not be called');
+    },
+  } as unknown as BrowserWorker;
+
+  await acquire(rpcBinding, { lab: true });
+  await expect(connect(rpcBinding, '../x')).rejects.toThrow('Invalid session ID');
+  expect(connectSessionCalls).toBe(0);
+});
+
 test(`should create browser with persistent context on playwright.chromium.connectOverCDP`, async ({ binding, playwright }) => {
   const url = endpointURLString(binding);
   const browser = await playwright.chromium.connectOverCDP(url);

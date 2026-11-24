@@ -128,6 +128,17 @@ export function encodeGuardrailsHeader(policy: SessionGuardrails): string {
 }
 
 /**
+ * Throws unless `sessionId` is a single URL path segment.
+ *
+ * @internal
+ */
+export function assertValidSessionId(sessionId: string | undefined): void {
+  if (!/^[\w-]+$/.test(sessionId ?? '')) {
+    throw new Error(`Invalid session ID: ${sessionId}`);
+  }
+}
+
+/**
  * @public
  */
 export type Locations =

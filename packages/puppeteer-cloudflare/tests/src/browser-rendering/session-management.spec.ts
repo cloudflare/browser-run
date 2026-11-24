@@ -342,6 +342,28 @@ test(`should reject malformed session IDs`, async () => {
   }
 });
 
+test(`should reject malformed session IDs before connectSession`, async () => {
+  let connectSessionCalls = 0;
+  const rpcBinding = {
+    fetch: async () => {
+      return new Response('ok');
+    },
+    acquire: async () => {
+      return {sessionId: 'session'};
+    },
+    connectSession: async () => {
+      connectSessionCalls++;
+      throw new Error('connectSession must not be called');
+    },
+  } as unknown as BrowserWorker;
+
+  await acquire(rpcBinding, {lab: true});
+  await expect(connect(rpcBinding, '../x')).rejects.toThrow(
+    'Invalid session ID',
+  );
+  expect(connectSessionCalls).toBe(0);
+});
+
 test(`should keep session open when closing browser created with connect`, async () => {
   const {sessionId} = await acquire(env.BROWSER, {keep_alive: 10000});
 

@@ -9,6 +9,7 @@ import {DEBUG_PREFIXES, debug} from 'puppeteer-core/lib/common/Debug.js';
 import {packageVersion} from '../packageVersion.js';
 import type {BrowserWorker} from './BrowserWorker.js';
 import {
+  assertValidSessionId,
   encodeGuardrailsHeader,
   GUARDRAILS_HEADER,
   type Browsers,
@@ -40,8 +41,8 @@ export class WorkersWebSocketTransport implements ConnectionTransport {
     options: WorkersWebSocketTransportOptions = {}
   ): Promise<WorkersWebSocketTransport> {
     const {browser, guardrails} = options;
-    if (!browser && !/^[\w-]+$/.test(sessionId ?? '')) {
-      throw new Error(`Invalid session ID: ${sessionId}`);
+    if (!browser) {
+      assertValidSessionId(sessionId);
     }
     // Browsers other than the default one are acquired on connect, so there's
     // no session to connect to yet.
