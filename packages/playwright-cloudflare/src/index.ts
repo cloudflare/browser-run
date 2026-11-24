@@ -50,11 +50,15 @@ const originalConnectOverCDP = playwright.chromium.connectOverCDP as (endpointUR
     : launch(wsUrl.toString());
 };
 
+function assertValidSessionId(sessionId: string): void {
+  if (!/^[\w-]+$/.test(sessionId))
+    throw new Error(`Invalid session ID: ${sessionId}`);
+}
+
 function sessionPath(sessionId?: string): string {
   if (!sessionId)
     return '';
-  if (!/^[\w-]+$/.test(sessionId))
-    throw new Error(`Invalid session ID: ${sessionId}`);
+  assertValidSessionId(sessionId);
   return `/${sessionId}`;
 }
 
@@ -159,6 +163,7 @@ export async function connect(endpoint: BrowserEndpoint, sessionIdOrOptions?: st
   const options = { ...extractOptions(endpoint), ...extraOptions };
   if (!options.sessionId)
     throw new Error(`Session ID is required for connect()`);
+  assertValidSessionId(options.sessionId);
 
   const binding = getBrowserBinding(endpoint);
   let connectionEndpoint = binding;
